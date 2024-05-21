@@ -1,0 +1,21 @@
+[workspace]
+members = ["server", "lambda"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+axum = { version = "0.7.5", default-features = false, features = ["http1", "http2", "json", "tokio", "tower-log", "tracing"] }
+tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
+tracing = { version = "0.1.40", default-features = false, features = ["std"] }
+
+[package]
+name = "archodex-backend"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+tower-http = { version = "0.5.2", default-features = false, features = ["trace"] }
+tracing.workspace = true
