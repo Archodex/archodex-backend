@@ -1,0 +1,42 @@
+DEFINE ANALYZER IF NOT EXISTS code TOKENIZERS class,camel FILTERS lowercase,ascii;
+
+DEFINE TABLE IF NOT EXISTS project SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS name ON TABLE project TYPE string;
+DEFINE INDEX IF NOT EXISTS unique_name ON TABLE project FIELDS name UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS environment SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS name ON TABLE environment TYPE string;
+DEFINE INDEX IF NOT EXISTS unique_name ON TABLE environment FIELDS name UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS context SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS attributes ON TABLE context FLEXIBLE TYPE object READONLY;
+DEFINE INDEX IF NOT EXISTS unique_attributes ON TABLE context FIELDS attributes UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS context_default_project TYPE RELATION FROM context TO project;
+DEFINE INDEX IF NOT EXISTS unique_context_default_project ON TABLE context_default_project FIELDS in UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS context_default_environment TYPE RELATION FROM context TO environment;
+DEFINE INDEX IF NOT EXISTS unique_context_default_environment ON TABLE context_default_environment FIELDS in UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS repository SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS context ON TABLE repository TYPE record<context> READONLY;
+DEFINE FIELD IF NOT EXISTS repository_id ON TABLE repository TYPE string READONLY;
+DEFINE INDEX IF NOT EXISTS unique_context_repository ON TABLE repository FIELDS context, repository_id UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS value SCHEMAFULL TYPE NORMAL;
+DEFINE TABLE IF NOT EXISTS hash_value SCHEMAFULL TYPE NORMAL;
+
+DEFINE TABLE IF NOT EXISTS resource SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS repository ON TABLE resource TYPE record<repository> READONLY;
+DEFINE FIELD IF NOT EXISTS type ON TABLE resource TYPE string READONLY
+  ASSERT $value = /([a-zA-Z0-9]+::)*[a-zA-Z0-9]+/;
+DEFINE INDEX IF NOT EXISTS type ON TABLE resource FIELDS type;
+DEFINE FIELD IF NOT EXISTS resource_id ON TABLE resource TYPE string READONLY;
+DEFINE INDEX IF NOT EXISTS unique_resource ON TABLE resource FIELDS repository, type, resource_id UNIQUE;
+DEFINE INDEX IF NOT EXISTS resource_id ON TABLE resource FIELDS resource_id SEARCH ANALYZER code BM25;
+DEFINE FIELD IF NOT EXISTS attrs ON TABLE resource TYPE object DEFAULT {};
+DEFINE FIELD IF NOT EXISTS value ON TABLE resource TYPE option<record<value>> DEFAULT NONE;
+DEFINE INDEX IF NOT EXISTS value ON TABLE resource FIELDS value;
+DEFINE FIELD IF NOT EXISTS hash_value ON TABLE resource TYPE option<record<hash_value>> DEFAULT NONE;
+DEFINE INDEX IF NOT EXISTS hash_value ON TABLE resource FIELDS hash_value;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE resource READONLY DEFAULT time::now();

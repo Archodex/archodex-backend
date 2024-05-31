@@ -1,0 +1,61 @@
+# @name Signup
+POST {{baseUrl}}/signup
+Content-Type: application/json
+
+{}
+
+###
+
+# @name Post Vault Report
+POST {{baseUrl}}/report
+Content-Type: application/json
+
+{
+    "context": {
+        "agent": "archodex/vault"
+    },
+    "repositories": [
+        {
+            "type": "Secrets",
+            "id": "https://vault.demo.servicearch.com/::secret",
+            "resources": [
+                {
+                    "type": "Secret",
+                    "id": "prod/db_creds::$.username",
+                    "hash": "53175bcc0524f37b47062fafdda28e3f8eb91d519ca0a184ca71bbebe72f969a"
+                },
+                {
+                    "type": "Secret",
+                    "id": "prod/db_creds::$.password",
+                    "hash": "6b3a55e0261b0304143f805a24924d0c1c44524821305f31d9277843b8a10f4e"
+                },
+                {
+                    "type": "Secret",
+                    "id": "stg/db_creds::$.username",
+                    "hash": "53175bcc0524f37b47062fafdda28e3f8eb91d519ca0a184ca71bbebe72f969a"
+                },
+                {
+                    "type": "Secret",
+                    "id": "stg/db_creds::$.password",
+                    "hash": "6b3a55e0261b0304143f805a24924d0c1c44524821305f31d9277843b8a10f4e"
+                }
+            ]
+        }
+    ]
+}
+
+###
+
+# @name Post GHA Report
+POST {{baseUrl}}/report
+Content-Type: application/json
+
+{
+    "context": {
+        "repo": "github.com/servicearch/website.git",
+        "workflow": "build",
+        "project": "website"
+    },
+    "repositories": [],
+    "resources": []
+}

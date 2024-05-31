@@ -2,8 +2,12 @@ use axum::{routing::*, Router};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+use crate::{resources, signup};
+
 pub fn router() -> Router {
     Router::new()
+        .route("/signup", post(signup::signup))
+        .route("/report", post(resources::post_report))
         .route("/health", get(|| async { "Ok" }))
         .layer(
             TraceLayer::new_for_http()

@@ -1,3 +1,11 @@
 {
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "rest-client.enableTelemetry": false,
+  "rest-client.environmentVariables": {
+    "localhost": {
+      "baseUrl": "http://localhost:5731"
+    }
+  },
+  "rest-client.previewOption": "exchange",
+  "rest-client.previewResponsePanelTakeFocus": false,
 }
