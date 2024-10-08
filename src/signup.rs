@@ -1,6 +1,5 @@
 use std::time::{Duration, Instant};
 
-use anyhow::anyhow;
 use aws_sdk_dynamodb::{
     operation::create_table::CreateTableError::ResourceInUseException,
     types::{
@@ -9,20 +8,17 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use axum::{http::StatusCode, Json};
+use axum::{http::StatusCode, Extension, Json};
 use serde::Deserialize;
+use surrealdb::{engine::local::Db, Surreal};
 use tokio::{sync::OnceCell, time::sleep};
 use tracing::{info, trace};
 
-use crate::{
-    db,
-    error::{Error, IntoError},
-    DEMO_ACCOUNT_ID,
-};
+use crate::{anyhow, auth::Principal, bail, conflict, ensure, Result};
 
 static DYNAMODB_CLIENT: OnceCell<aws_sdk_dynamodb::Client> = OnceCell::const_new();
 
-async fn get_client() -> &'static aws_sdk_dynamodb::Client {
+async fn ddb_client() -> &'static aws_sdk_dynamodb::Client {
     DYNAMODB_CLIENT
         .get_or_init(|| async {
             let config = aws_config::load_from_env().await;
@@ -34,9 +30,13 @@ async fn get_client() -> &'static aws_sdk_dynamodb::Client {
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignupRequest {}
 
-pub async fn signup(Json(_): Json<SignupRequest>) -> Result<(), Error> {
-    let client = get_client().await;
-    let table_name = format!("{}-resources", DEMO_ACCOUNT_ID);
+pub(crate) async fn signup(
+    Extension(principal): Extension<Principal>,
+    Extension(db): Extension<Surreal<Db>>,
+    Json(_): Json<SignupRequest>,
+) -> Result<()> {
+    let client = ddb_client().await;
+    let table_name = format!("{}-resources", principal.account_id());
 
     info!("Creating DynamoDB table {table_name}...");
 
@@ -71,9 +71,9 @@ pub async fn signup(Json(_): Json<SignupRequest>) -> Result<(), Error> {
         .send()
         .await
     {
-        return match error.into_service_error() {
-            ResourceInUseException(_) => Err(StatusCode::CONFLICT.into_error()),
-            error => Err(error.into()),
+        match error.into_service_error() {
+            ResourceInUseException(_) => conflict!("Account already exists"),
+            err => bail!(err),
         };
     }
 
@@ -103,18 +103,20 @@ pub async fn signup(Json(_): Json<SignupRequest>) -> Result<(), Error> {
             break;
         }
 
-        if Instant::now().duration_since(start) > Duration::from_secs(30) {
-            return Err(
-                anyhow!("Table {table_name} failed to become available within 30 seconds").into(),
-            );
-        }
+        ensure!(
+            Instant::now().duration_since(start) <= Duration::from_secs(30),
+            "Table {table_name} failed to become available within 30 seconds"
+        );
 
         sleep(Duration::from_secs(1)).await;
     }
 
-    info!("Migrating 'resources' database for account {DEMO_ACCOUNT_ID}");
+    info!(
+        "Migrating 'resources' database for account {}",
+        principal.account_id()
+    );
 
-    migrator::migrate_account_resources_database(db(DEMO_ACCOUNT_ID).await).await?;
+    migrator::migrate_account_resources_database(&db).await?;
 
     Ok(())
 }

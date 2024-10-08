@@ -6,56 +6,113 @@ Content-Type: application/json
 
 ###
 
-# @name Post Vault Report
+# @name Post Report
 POST {{baseUrl}}/report
 Content-Type: application/json
 
 {
-    "context": {
-        "agent": "archodex/vault"
-    },
-    "repositories": [
+  "resources": [
+    {
+      "type": "GitHub Service",
+      "id": "github.com",
+      "first_seen_at": "2011-10-05T14:48:00.001Z",
+      "last_seen_at": "2011-10-05T14:48:00.001Z",
+      "contains": [
         {
-            "type": "Secrets",
-            "id": "https://vault.demo.servicearch.com/::secret",
-            "resources": [
+          "type": "Organization",
+          "id": "archodex",
+          "first_seen_at": "2011-10-05T14:48:00.001Z",
+          "last_seen_at": "2011-10-05T14:48:00.001Z",
+          "contains": [
+            {
+              "type": "Git Repository",
+              "id": "website",
+              "first_seen_at": "2011-10-05T14:48:00.001Z",
+              "last_seen_at": "2011-10-05T14:48:00.001Z",
+              "contains": [
                 {
-                    "type": "Secret",
-                    "id": "prod/db_creds::$.username",
-                    "hash": "53175bcc0524f37b47062fafdda28e3f8eb91d519ca0a184ca71bbebe72f969a"
-                },
-                {
-                    "type": "Secret",
-                    "id": "prod/db_creds::$.password",
-                    "hash": "6b3a55e0261b0304143f805a24924d0c1c44524821305f31d9277843b8a10f4e"
-                },
-                {
-                    "type": "Secret",
-                    "id": "stg/db_creds::$.username",
-                    "hash": "53175bcc0524f37b47062fafdda28e3f8eb91d519ca0a184ca71bbebe72f969a"
-                },
-                {
-                    "type": "Secret",
-                    "id": "stg/db_creds::$.password",
-                    "hash": "6b3a55e0261b0304143f805a24924d0c1c44524821305f31d9277843b8a10f4e"
+                  "type": "GitHub Actions Workflow",
+                  "id": ".github/workflows/deploy.yml",
+                  "first_seen_at": "2011-10-05T14:48:00.001Z",
+                  "last_seen_at": "2011-10-05T14:48:00.001Z"
                 }
-            ]
+              ]
+            }
+          ]
         }
-    ]
-}
-
-###
-
-# @name Post GHA Report
-POST {{baseUrl}}/report
-Content-Type: application/json
-
-{
-    "context": {
-        "repo": "github.com/servicearch/website.git",
-        "workflow": "build",
-        "project": "website"
+      ]
     },
-    "repositories": [],
-    "resources": []
+    {
+      "type": "Environment",
+      "id": "stg",
+      "first_seen_at": "2011-10-05T14:48:00.001Z",
+      "last_seen_at": "2011-10-05T14:48:00.001Z"
+    },
+    {
+      "type": "Hashicorp Vault Service",
+      "id": "vault.demo.chase.dev.servicearch.com",
+      "first_seen_at": "2011-10-05T14:48:00.001Z",
+      "last_seen_at": "2011-10-05T14:48:00.001Z",
+      "contains": [
+        {
+          "type": "Secrets Engine Mount",
+          "id": "secret",
+          "first_seen_at": "2011-10-05T14:48:00.001Z",
+          "last_seen_at": "2011-10-05T14:48:00.001Z",
+          "attributes": {
+            "type": "kvv2"
+          },
+          "contains": [
+            {
+              "type": "Secret",
+              "id": "stg/db_creds",
+              "first_seen_at": "2011-10-05T14:48:00.001Z",
+              "last_seen_at": "2011-10-05T14:48:00.001Z",
+              "contains": [
+                {
+                  "type": "Secret Value Hash",
+                  "id": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                  "globally_unique": true,
+                  "first_seen_at": "2011-10-05T14:48:00.001Z",
+                  "last_seen_at": "2011-10-05T14:48:00.001Z"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event_reports": [
+    {
+      "principals": [
+        [
+          {"type": "GitHub Service", "id": "github.com"},
+          {"type": "Organization", "id": "archodex"},
+          {"type": "Git Repository", "id": "website"},
+          {"type": "GitHub Actions Workflow", "id": ".github/workflows/deploy.yml"}
+        ],
+        [
+          {"type": "Environment", "id": "stg"}
+        ]
+      ],
+      "resources": [
+        [
+          {"type": "Hashicorp Vault Service", "id": "vault.demo.chase.dev.servicearch.com"},
+          {"type": "Secrets Engine Mount", "id": "secret"},
+          {"type": "Secret", "id": "stg/db_creds"}
+        ],
+        [
+          {"type": "Secret Value Hash", "id": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}
+        ]
+      ],
+      "events": [
+        {
+          "type": "read",
+          "first_seen_at": "2011-10-05T14:48:00.001Z",
+          "last_seen_at": "2011-10-05T14:48:00.001Z"
+        }
+      ]
+    }
+  ]
 }

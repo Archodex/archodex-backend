@@ -1,42 +1,32 @@
-DEFINE ANALYZER IF NOT EXISTS code TOKENIZERS class,camel FILTERS lowercase,ascii;
-
-DEFINE TABLE IF NOT EXISTS project SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS name ON TABLE project TYPE string;
-DEFINE INDEX IF NOT EXISTS unique_name ON TABLE project FIELDS name UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS environment SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS name ON TABLE environment TYPE string;
-DEFINE INDEX IF NOT EXISTS unique_name ON TABLE environment FIELDS name UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS context SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS attributes ON TABLE context FLEXIBLE TYPE object READONLY;
-DEFINE INDEX IF NOT EXISTS unique_attributes ON TABLE context FIELDS attributes UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS context_default_project TYPE RELATION FROM context TO project;
-DEFINE INDEX IF NOT EXISTS unique_context_default_project ON TABLE context_default_project FIELDS in UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS context_default_environment TYPE RELATION FROM context TO environment;
-DEFINE INDEX IF NOT EXISTS unique_context_default_environment ON TABLE context_default_environment FIELDS in UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS repository SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS context ON TABLE repository TYPE record<context> READONLY;
-DEFINE FIELD IF NOT EXISTS repository_id ON TABLE repository TYPE string READONLY;
-DEFINE INDEX IF NOT EXISTS unique_context_repository ON TABLE repository FIELDS context, repository_id UNIQUE;
-
-DEFINE TABLE IF NOT EXISTS value SCHEMAFULL TYPE NORMAL;
-DEFINE TABLE IF NOT EXISTS hash_value SCHEMAFULL TYPE NORMAL;
+DEFINE ANALYZER IF NOT EXISTS code TOKENIZERS class,camel FILTERS ascii,snowball(english);
 
 DEFINE TABLE IF NOT EXISTS resource SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS repository ON TABLE resource TYPE record<repository> READONLY;
-DEFINE FIELD IF NOT EXISTS type ON TABLE resource TYPE string READONLY
-  ASSERT $value = /([a-zA-Z0-9]+::)*[a-zA-Z0-9]+/;
-DEFINE INDEX IF NOT EXISTS type ON TABLE resource FIELDS type;
-DEFINE FIELD IF NOT EXISTS resource_id ON TABLE resource TYPE string READONLY;
-DEFINE INDEX IF NOT EXISTS unique_resource ON TABLE resource FIELDS repository, type, resource_id UNIQUE;
-DEFINE INDEX IF NOT EXISTS resource_id ON TABLE resource FIELDS resource_id SEARCH ANALYZER code BM25;
-DEFINE FIELD IF NOT EXISTS attrs ON TABLE resource TYPE object DEFAULT {};
-DEFINE FIELD IF NOT EXISTS value ON TABLE resource TYPE option<record<value>> DEFAULT NONE;
-DEFINE INDEX IF NOT EXISTS value ON TABLE resource FIELDS value;
-DEFINE FIELD IF NOT EXISTS hash_value ON TABLE resource TYPE option<record<hash_value>> DEFAULT NONE;
-DEFINE INDEX IF NOT EXISTS hash_value ON TABLE resource FIELDS hash_value;
-DEFINE FIELD IF NOT EXISTS created_at ON TABLE resource READONLY DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS id ON TABLE resource TYPE array<array<string, 2>> READONLY;
+DEFINE FIELD IF NOT EXISTS resource_type ON TABLE resource TYPE string READONLY DEFAULT array::last(record::id($this.id))[0];
+DEFINE INDEX IF NOT EXISTS resource_type_tokens ON TABLE resource FIELDS resource_type SEARCH ANALYZER code BM25;
+DEFINE FIELD IF NOT EXISTS resource_id ON TABLE resource TYPE string READONLY DEFAULT array::last(record::id($this.id))[1];
+DEFINE INDEX IF NOT EXISTS resource_id_tokens ON TABLE resource FIELDS resource_id SEARCH ANALYZER code BM25;
+DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE resource TYPE datetime READONLY;
+DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE resource TYPE datetime;
+DEFINE FIELD IF NOT EXISTS attributes ON TABLE resource FLEXIBLE TYPE object DEFAULT {};
+
+// ON DUPLICATE KEY UPDATE doesn't change anything, but prevents erroring if the
+// record already exists
+INSERT INTO resource {
+  id: [],
+  resource_type: "Archodex Root",
+  resource_id: "Root",
+  first_seen_at: time::now(),
+  last_seen_at: time::now()
+} ON DUPLICATE KEY UPDATE resource_id = "Root" RETURN NONE;
+
+DEFINE TABLE IF NOT EXISTS contains SCHEMAFULL TYPE RELATION FROM resource TO resource ENFORCED;
+DEFINE INDEX IF NOT EXISTS unique ON contains FIELDS out UNIQUE;
+DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE contains TYPE datetime READONLY;
+DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE contains TYPE datetime;
+
+DEFINE TABLE IF NOT EXISTS event SCHEMAFULL TYPE RELATION FROM resource TO resource ENFORCED;
+DEFINE FIELD IF NOT EXISTS type ON TABLE event TYPE string READONLY;
+DEFINE INDEX IF NOT EXISTS unique ON TABLE event FIELDS in, out, type UNIQUE;
+DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE event TYPE datetime READONLY;
+DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE event TYPE datetime;
