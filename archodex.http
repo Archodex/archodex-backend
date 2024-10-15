@@ -11,108 +11,354 @@ POST {{baseUrl}}/report
 Content-Type: application/json
 
 {
-  "resources": [
+  "resource_captures": [
     {
-      "type": "GitHub Service",
-      "id": "github.com",
-      "first_seen_at": "2011-10-05T14:48:00.001Z",
-      "last_seen_at": "2011-10-05T14:48:00.001Z",
-      "contains": [
-        {
-          "type": "Organization",
-          "id": "archodex",
-          "first_seen_at": "2011-10-05T14:48:00.001Z",
-          "last_seen_at": "2011-10-05T14:48:00.001Z",
-          "contains": [
-            {
-              "type": "Git Repository",
-              "id": "website",
-              "first_seen_at": "2011-10-05T14:48:00.001Z",
-              "last_seen_at": "2011-10-05T14:48:00.001Z",
-              "contains": [
-                {
-                  "type": "GitHub Actions Workflow",
-                  "id": ".github/workflows/deploy.yml",
-                  "first_seen_at": "2011-10-05T14:48:00.001Z",
-                  "last_seen_at": "2011-10-05T14:48:00.001Z"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "Environment",
-      "id": "stg",
-      "first_seen_at": "2011-10-05T14:48:00.001Z",
-      "last_seen_at": "2011-10-05T14:48:00.001Z"
-    },
-    {
-      "type": "Hashicorp Vault Service",
+      "type": "HashiCorp Vault Service",
       "id": "vault.demo.chase.dev.servicearch.com",
-      "first_seen_at": "2011-10-05T14:48:00.001Z",
-      "last_seen_at": "2011-10-05T14:48:00.001Z",
+      "first_seen_at": "2024-10-11T00:25:15.078987097Z",
+      "last_seen_at": "2024-10-11T00:25:15.128806257Z",
       "contains": [
         {
           "type": "Secrets Engine Mount",
           "id": "secret",
-          "first_seen_at": "2011-10-05T14:48:00.001Z",
-          "last_seen_at": "2011-10-05T14:48:00.001Z",
-          "attributes": {
-            "type": "kvv2"
-          },
+          "first_seen_at": "2024-10-11T00:25:15.078885557Z",
+          "last_seen_at": "2024-10-11T00:25:15.128675262Z",
           "contains": [
             {
               "type": "Secret",
-              "id": "stg/db_creds",
-              "first_seen_at": "2011-10-05T14:48:00.001Z",
-              "last_seen_at": "2011-10-05T14:48:00.001Z",
-              "contains": [
-                {
-                  "type": "Secret Value Hash",
-                  "id": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-                  "globally_unique": true,
-                  "first_seen_at": "2011-10-05T14:48:00.001Z",
-                  "last_seen_at": "2011-10-05T14:48:00.001Z"
-                }
-              ]
+              "id": "stg/sprockets/db_creds",
+              "first_seen_at": "2024-10-11T00:25:15.078752919Z",
+              "last_seen_at": "2024-10-11T00:25:15.078752919Z"
+            },
+            {
+              "type": "Secret",
+              "id": "prod/sprockets/db_creds",
+              "first_seen_at": "2024-10-11T00:25:15.128522998Z",
+              "last_seen_at": "2024-10-11T00:25:15.128522998Z"
             }
           ]
         }
       ]
+    },
+    {
+      "type": "GitHub Service",
+      "id": "https://github.com",
+      "first_seen_at": "2024-10-11T00:24:54.216929402Z",
+      "last_seen_at": "2024-10-11T00:24:54.216929402Z",
+      "contains": [
+        {
+          "type": "Organization",
+          "id": "txase",
+          "first_seen_at": "2024-10-11T00:24:54.216669556Z",
+          "last_seen_at": "2024-10-11T00:24:54.216669556Z",
+          "contains": [
+            {
+              "type": "Git Repository",
+              "id": "txase/archodex-demo-sprockets",
+              "first_seen_at": "2024-10-11T00:24:54.216581932Z",
+              "last_seen_at": "2024-10-11T00:24:54.216581932Z",
+              "contains": [
+                {
+                  "type": "GitHub Actions Workflow",
+                  "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main",
+                  "first_seen_at": "2024-10-11T00:24:54.216488328Z",
+                  "last_seen_at": "2024-10-11T00:24:54.216488328Z"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Actor",
+          "id": "txase",
+          "first_seen_at": "2024-10-11T00:24:54.216756679Z",
+          "last_seen_at": "2024-10-11T00:24:54.216756679Z"
+        },
+        {
+          "type": "Actor",
+          "id": "txase",
+          "first_seen_at": "2024-10-11T00:24:54.216843311Z",
+          "last_seen_at": "2024-10-11T00:24:54.216843311Z"
+        }
+      ]
+    },
+    {
+      "type": "HTTPS Server",
+      "id": "terraform-states-891376912002.s3.us-west-2.amazonaws.com",
+      "first_seen_at": "2024-10-11T00:25:00.823699558Z",
+      "last_seen_at": "2024-10-11T00:25:11.165449195Z",
+      "contains": [
+        {
+          "type": "Route",
+          "id": "/",
+          "first_seen_at": "2024-10-11T00:25:00.823507289Z",
+          "last_seen_at": "2024-10-11T00:25:10.579242187Z"
+        },
+        {
+          "type": "Route",
+          "id": "/demo-sprockets/terraform.tfstate",
+          "first_seen_at": "2024-10-11T00:25:01.239777398Z",
+          "last_seen_at": "2024-10-11T00:25:11.165269269Z"
+        }
+      ]
     }
   ],
-  "event_reports": [
+  "event_captures": [
     {
       "principals": [
         [
-          {"type": "GitHub Service", "id": "github.com"},
-          {"type": "Organization", "id": "archodex"},
-          {"type": "Git Repository", "id": "website"},
-          {"type": "GitHub Actions Workflow", "id": ".github/workflows/deploy.yml"}
-        ],
-        [
-          {"type": "Environment", "id": "stg"}
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Actor",
+            "id": "txase"
+          }
         ]
       ],
       "resources": [
         [
-          {"type": "Hashicorp Vault Service", "id": "vault.demo.chase.dev.servicearch.com"},
-          {"type": "Secrets Engine Mount", "id": "secret"},
-          {"type": "Secret", "id": "stg/db_creds"}
-        ],
-        [
-          {"type": "Secret Value Hash", "id": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Actor",
+            "id": "txase"
+          }
         ]
       ],
       "events": [
         {
-          "type": "read",
-          "first_seen_at": "2011-10-05T14:48:00.001Z",
-          "last_seen_at": "2011-10-05T14:48:00.001Z"
+          "type": "Assumed",
+          "first_seen_at": "2024-10-11T00:24:54.217198545Z",
+          "last_seen_at": "2024-10-11T00:24:54.217198545Z"
+        }
+      ]
+    },
+    {
+      "principals": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Organization",
+            "id": "txase"
+          },
+          {
+            "type": "Git Repository",
+            "id": "txase/archodex-demo-sprockets"
+          },
+          {
+            "type": "GitHub Actions Workflow",
+            "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main"
+          }
+        ]
+      ],
+      "resources": [
+        [
+          {
+            "type": "HashiCorp Vault Service",
+            "id": "vault.demo.chase.dev.servicearch.com"
+          },
+          {
+            "type": "Secrets Engine Mount",
+            "id": "secret"
+          },
+          {
+            "type": "Secret",
+            "id": "stg/sprockets/db_creds"
+          }
+        ]
+      ],
+      "events": [
+        {
+          "type": "Read",
+          "first_seen_at": "2024-10-11T00:25:15.079090911Z",
+          "last_seen_at": "2024-10-11T00:25:15.079090911Z"
+        }
+      ]
+    },
+    {
+      "principals": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Organization",
+            "id": "txase"
+          },
+          {
+            "type": "Git Repository",
+            "id": "txase/archodex-demo-sprockets"
+          },
+          {
+            "type": "GitHub Actions Workflow",
+            "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main"
+          }
+        ]
+      ],
+      "resources": [
+        [
+          {
+            "type": "HashiCorp Vault Service",
+            "id": "vault.demo.chase.dev.servicearch.com"
+          },
+          {
+            "type": "Secrets Engine Mount",
+            "id": "secret"
+          },
+          {
+            "type": "Secret",
+            "id": "prod/sprockets/db_creds"
+          }
+        ]
+      ],
+      "events": [
+        {
+          "type": "Read",
+          "first_seen_at": "2024-10-11T00:25:15.128919489Z",
+          "last_seen_at": "2024-10-11T00:25:15.128919489Z"
+        }
+      ]
+    },
+    {
+      "principals": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Organization",
+            "id": "txase"
+          },
+          {
+            "type": "Git Repository",
+            "id": "txase/archodex-demo-sprockets"
+          },
+          {
+            "type": "GitHub Actions Workflow",
+            "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main"
+          }
+        ]
+      ],
+      "resources": [
+        [
+          {
+            "type": "HTTPS Server",
+            "id": "terraform-states-891376912002.s3.us-west-2.amazonaws.com"
+          },
+          {
+            "type": "Route",
+            "id": "/"
+          }
+        ]
+      ],
+      "events": [
+        {
+          "type": "Read",
+          "first_seen_at": "2024-10-11T00:25:00.823841003Z",
+          "last_seen_at": "2024-10-11T00:25:10.579459744Z"
+        }
+      ]
+    },
+    {
+      "principals": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Organization",
+            "id": "txase"
+          },
+          {
+            "type": "Git Repository",
+            "id": "txase/archodex-demo-sprockets"
+          },
+          {
+            "type": "GitHub Actions Workflow",
+            "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main"
+          }
+        ]
+      ],
+      "resources": [
+        [
+          {
+            "type": "HTTPS Server",
+            "id": "terraform-states-891376912002.s3.us-west-2.amazonaws.com"
+          },
+          {
+            "type": "Route",
+            "id": "/demo-sprockets/terraform.tfstate"
+          }
+        ]
+      ],
+      "events": [
+        {
+          "type": "Read",
+          "first_seen_at": "2024-10-11T00:25:01.240045940Z",
+          "last_seen_at": "2024-10-11T00:25:11.165609465Z"
+        }
+      ]
+    },
+    {
+      "principals": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Actor",
+            "id": "txase"
+          }
+        ]
+      ],
+      "resources": [
+        [
+          {
+            "type": "GitHub Service",
+            "id": "https://github.com"
+          },
+          {
+            "type": "Organization",
+            "id": "txase"
+          },
+          {
+            "type": "Git Repository",
+            "id": "txase/archodex-demo-sprockets"
+          },
+          {
+            "type": "GitHub Actions Workflow",
+            "id": "txase/archodex-demo-sprockets/.github/workflows/deploy.yml@refs/heads/main"
+          }
+        ]
+      ],
+      "events": [
+        {
+          "type": "Invoked",
+          "first_seen_at": "2024-10-11T00:24:54.217587372Z",
+          "last_seen_at": "2024-10-11T00:24:54.217587372Z"
         }
       ]
     }
   ]
+}
+
+###
+
+# @name Query all entities
+GET {{baseUrl}}/query
+Content-Type: application/json
+
+{
+  "type": "ALL"
 }

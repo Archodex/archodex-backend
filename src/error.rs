@@ -77,62 +77,82 @@ where
     }
 }
 
-#[allow(unused_macros)]
-macro_rules! conflict {
-    ($msg:literal $(,)?) => {
-        bail!($crate::error::PublicError::new(
-            StatusCode::CONFLICT,
-            $msg,
-        ))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        bail!($crate::error::PublicError::new(
-            StatusCode::CONFLICT,
-            format!($fmt, $($arg)*),
-        ))
-    };
-}
-#[allow(unused_imports)]
-pub(super) use conflict;
+pub(super) mod macros {
+    #[allow(unused_macros)]
+    macro_rules! bad_request {
+        ($msg:literal $(,)?) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::BAD_REQUEST,
+                $msg,
+            ))
+        };
+        ($fmt:expr, $($arg:tt)*) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::BAD_REQUEST,
+                format!($fmt, $($arg)*),
+            ))
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use bad_request;
 
-// Re-implement anyhow macros to work with above error types
-pub(super) use anyhow::anyhow;
+    #[allow(unused_macros)]
+    macro_rules! conflict {
+        ($msg:literal $(,)?) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::CONFLICT,
+                $msg,
+            ))
+        };
+        ($fmt:expr, $($arg:tt)*) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::CONFLICT,
+                format!($fmt, $($arg)*),
+            ))
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use conflict;
 
-macro_rules! bail {
-    ($msg:literal $(,)?) => {
-        return Err(anyhow!($msg).into())
-    };
-    ($err:expr $(,)?) => {
-        return Err(anyhow!($err).into())
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        return Err(anyhow!($fmt, $($arg)*).into())
-    };
-}
-pub(super) use bail;
+    // Re-implement anyhow macros to work with above error types
+    pub(crate) use anyhow::anyhow;
 
-#[allow(unused_macros)]
-macro_rules! ensure {
-    ($cond:expr $(,)?) => {
-        if !$cond {
-            bail!(concat!("Condition failed: `", stringify!($cond), "`"))
-        }
-    };
-    ($cond:expr, $msg:literal $(,)?) => {
-        if !$cond {
-            bail!($msg);
-        }
-    };
-    ($cond:expr, $err:expr $(,)?) => {
-        if !$cond {
-            bail!($err);
-        }
-    };
-    ($cond:expr, $fmt:expr, $($arg:tt)*) => {
-        if !$cond {
-            bail!($fmt, $($arg)*);
-        }
-    };
+    macro_rules! bail {
+        ($msg:literal $(,)?) => {
+            return Err(anyhow!($msg).into())
+        };
+        ($err:expr $(,)?) => {
+            return Err(anyhow!($err).into())
+        };
+        ($fmt:expr, $($arg:tt)*) => {
+            return Err(anyhow!($fmt, $($arg)*).into())
+        };
+    }
+    pub(crate) use bail;
+
+    #[allow(unused_macros)]
+    macro_rules! ensure {
+        ($cond:expr $(,)?) => {
+            if !$cond {
+                bail!(concat!("Condition failed: `", stringify!($cond), "`"))
+            }
+        };
+        ($cond:expr, $msg:literal $(,)?) => {
+            if !$cond {
+                bail!($msg);
+            }
+        };
+        ($cond:expr, $err:expr $(,)?) => {
+            if !$cond {
+                bail!($err);
+            }
+        };
+        ($cond:expr, $fmt:expr, $($arg:tt)*) => {
+            if !$cond {
+                bail!($fmt, $($arg)*);
+            }
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use ensure;
 }
-#[allow(unused_imports)]
-pub(super) use ensure;

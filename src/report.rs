@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use surrealdb::{
     engine::local::Db,
     method::Query,
@@ -11,22 +11,19 @@ use surrealdb::{
 };
 use tracing::info;
 
-use crate::{value::surrealdb_value_from_json_value, Result};
+use crate::{
+    resource::{ResourceId, ResourceIdPart},
+    value::surrealdb_value_from_json_value,
+    Result,
+};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct ResourceId {
-    r#type: String,
-    id: String,
-}
-
-impl From<ResourceId> for surrealdb::sql::Value {
-    fn from(value: ResourceId) -> Self {
+impl From<ResourceIdPart> for surrealdb::sql::Value {
+    fn from(value: ResourceIdPart) -> Self {
         surrealdb::sql::Array::from(vec![value.r#type, value.id]).into()
     }
 }
 
-fn surrealdb_thing_from_resource_ids(value: Vec<ResourceId>) -> surrealdb::sql::Value {
+fn surrealdb_thing_from_resource_id(value: ResourceId) -> surrealdb::sql::Value {
     surrealdb::sql::Thing::from((
         "resource",
         surrealdb::sql::Id::from(
@@ -43,7 +40,7 @@ fn surrealdb_thing_from_resource_ids(value: Vec<ResourceId>) -> surrealdb::sql::
 #[serde(deny_unknown_fields)]
 struct ResourceTreeNode {
     #[serde(flatten)]
-    id: ResourceId,
+    id: ResourceIdPart,
     globally_unique: Option<bool>,
     first_seen_at: DateTime<Utc>,
     last_seen_at: DateTime<Utc>,
@@ -61,17 +58,17 @@ struct Event {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct EventsReport {
-    principals: Vec<Vec<ResourceId>>,
-    resources: Vec<Vec<ResourceId>>,
+struct EventCapture {
+    principals: Vec<ResourceId>,
+    resources: Vec<ResourceId>,
     events: Vec<Event>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Request {
-    resources: Vec<ResourceTreeNode>,
-    event_reports: Vec<EventsReport>,
+    resource_captures: Vec<ResourceTreeNode>,
+    event_captures: Vec<EventCapture>,
 }
 
 fn upsert_resource_tree_node<'a, 'b>(
@@ -192,12 +189,12 @@ fn upsert_resource_tree_node<'a, 'b>(
     query.query(contains_upsert)
 }
 
-fn upsert_events<'a, 'b>(mut query: Query<'b, Db>, report: EventsReport) -> Query<'b, Db> {
+fn upsert_events<'a, 'b>(mut query: Query<'b, Db>, report: EventCapture) -> Query<'b, Db> {
     for principal in report.principals {
-        let principal_id = surrealdb_thing_from_resource_ids(principal);
+        let principal_id = surrealdb_thing_from_resource_id(principal);
 
         for resource in &report.resources {
-            let resource_id = surrealdb_thing_from_resource_ids(resource.to_vec());
+            let resource_id = surrealdb_thing_from_resource_id(resource.clone());
 
             for event in &report.events {
                 let mut event_upsert = InsertStatement::default();
@@ -242,46 +239,14 @@ pub(crate) async fn report(
 ) -> Result<()> {
     let mut query = db.query(BeginStatement::default());
 
-    for resource_tree_node in req.resources {
+    for resource_tree_node in req.resource_captures {
         query =
             upsert_resource_tree_node(query, &mut surrealdb::sql::Array::new(), resource_tree_node);
     }
 
-    for events_report in req.event_reports {
+    for events_report in req.event_captures {
         query = upsert_events(query, events_report);
     }
-
-    /*for event in req.events {
-        // INSERT RELATION INTO event (in, type, out, first_seen_at, last_seen_at) VALUES (<from>, <type>, <to>, <first_seen_at>, <last_seen_at>) ON DUPLICATE KEY UPDATE last_seen_at = <last_seen_at> RETURN NONE
-        let mut insert = InsertStatement::default();
-        insert.into = Some("event".into());
-        insert.data = surrealdb::sql::Data::ValuesExpression(vec![vec![
-            ("id".into(), resource.id.binding_value().into()),
-            ("first_seen_at".into(), resource.first_seen_at.into()),
-            ("last_seen_at".into(), resource.last_seen_at.into()),
-        ]]);
-        insert.update = Some(surrealdb::sql::Data::UpdateExpression(vec![(
-            "last_seen_at".into(),
-            surrealdb::sql::Operator::Equal,
-            resource.last_seen_at.into(),
-        )]));
-        query = query.query(insert);
-
-
-        if let Some(attributes) = resource.attributes {
-            if !attributes.is_empty() {
-                // UPDATE event MERGE { attributes: <attributes>	} WHERE in = <from> AND out = <to> AND type = <type> RETURN NONE;
-                let mut update = UpdateStatement::default();
-                update.what = vec![surrealdb::sql::Value::from(&resource.id)].into();
-
-                let mut merge_data = surrealdb::sql::Object::default();
-                merge_data.insert("attributes".to_string(), attributes.into());
-                update.data = Some(surrealdb::sql::Data::MergeExpression(merge_data.into()));
-
-                update.output = Some(surrealdb::sql::Output::None);
-            }
-        }
-    }*/
 
     query = query.query(CommitStatement::default());
 

@@ -8,13 +8,13 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use axum::{http::StatusCode, Extension, Json};
+use axum::{Extension, Json};
 use serde::Deserialize;
 use surrealdb::{engine::local::Db, Surreal};
 use tokio::{sync::OnceCell, time::sleep};
 use tracing::{info, trace};
 
-use crate::{anyhow, auth::Principal, bail, conflict, ensure, Result};
+use crate::{auth::Principal, macros::*, Result};
 
 static DYNAMODB_CLIENT: OnceCell<aws_sdk_dynamodb::Client> = OnceCell::const_new();
 
