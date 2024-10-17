@@ -1,19 +1,14 @@
-use axum::{Extension, Json};
+use axum::{extract::Path, Extension, Json};
 use serde::{Deserialize, Serialize};
 use surrealdb::{engine::local::Db, Surreal};
 
 use crate::{event::Event, global_container::GlobalContainer, resource::Resource, Result};
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum QueryType {
+#[serde(rename_all = "snake_case")]
+pub(super) enum QueryType {
     All,
     Secrets,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct QueryRequest {
-    r#type: QueryType,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -26,8 +21,8 @@ pub(super) struct QueryResponse {
 }
 
 pub(super) async fn query(
+    Path(r#type): Path<QueryType>,
     Extension(db): Extension<Surreal<Db>>,
-    Json(req): Json<QueryRequest>,
 ) -> Result<Json<QueryResponse>> {
     const BEGIN: &str = "BEGIN READONLY; $resources = []; $events = [];";
 
@@ -45,7 +40,7 @@ pub(super) async fn query(
     
     COMMIT;";
 
-    let query = match req.r#type {
+    let query = match r#type {
         QueryType::All => db
             .query(BEGIN)
             .query(Resource::get_all())
