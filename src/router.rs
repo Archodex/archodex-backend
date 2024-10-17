@@ -1,6 +1,9 @@
 use axum::{middleware, routing::*, Router};
 use tower::ServiceBuilder;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tower_http::{
+    cors::{AllowMethods, AllowOrigin, CorsLayer},
+    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+};
 use tracing::Level;
 
 use crate::{auth::auth, db::db, query, report, signup};
@@ -9,9 +12,14 @@ pub fn router() -> Router {
     Router::new()
         .route("/signup", post(signup::signup))
         .route("/report", post(report::report))
-        .route("/query", get(query::query))
+        .route("/query/:type", get(query::query))
         .layer(
             ServiceBuilder::new()
+                .layer(
+                    CorsLayer::new()
+                        .allow_methods(AllowMethods::any())
+                        .allow_origin(AllowOrigin::any()),
+                )
                 .layer(middleware::from_fn(auth))
                 .layer(middleware::from_fn(db)),
         )
