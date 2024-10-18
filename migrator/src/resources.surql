@@ -26,9 +26,28 @@ DEFINE INDEX IF NOT EXISTS unique ON contains FIELDS out UNIQUE;
 DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE contains TYPE datetime READONLY;
 DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE contains TYPE datetime;
 
+DEFINE TABLE IF NOT EXISTS principal_chain SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS id ON TABLE principal_chain FLEXIBLE TYPE array<object> READONLY
+    // Assert chain is an array of principals, where a principal has a resource
+    // ID (`id`) and optionally an event type (`event`). The event type should
+    // be a string for all principals except the last.
+    ASSERT $this.id.all(|$principal|
+        object::len($principal) <= 2 &&
+        (type::is::none($principal.event) || type::is::string($principal.event)) &&
+        type::is::array($principal.id) && $principal.id.all(|$id|
+            type::is::array($id) && array::len($id) == 2 && $id.all(|$part|
+                type::is::string($part)
+            )
+        )
+    );
+DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE principal_chain TYPE datetime READONLY;
+DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE principal_chain TYPE datetime;
+
 DEFINE TABLE IF NOT EXISTS event SCHEMAFULL TYPE RELATION FROM resource TO resource ENFORCED;
 DEFINE FIELD IF NOT EXISTS type ON TABLE event TYPE string READONLY;
 DEFINE INDEX IF NOT EXISTS unique ON TABLE event FIELDS in, out, type UNIQUE;
+DEFINE FIELD IF NOT EXISTS principal_chains ON TABLE event TYPE set<record<principal_chain>>;
+DEFINE FIELD IF NOT EXISTS has_direct_principal_chain ON TABLE event TYPE bool;
 DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE event TYPE datetime READONLY;
 DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE event TYPE datetime;
 

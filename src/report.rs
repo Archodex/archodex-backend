@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use std::collections::HashMap;
 
 use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
@@ -12,32 +13,42 @@ use surrealdb::{
 use tracing::info;
 
 use crate::{
-    resource::{ResourceId, ResourceIdPart},
+    next_binding,
+    resource::{surrealdb_thing_from_resource_id, ResourceId, ResourceIdPart},
     value::surrealdb_value_from_json_value,
     Result,
 };
 
-impl From<ResourceIdPart> for surrealdb::sql::Value {
-    fn from(value: ResourceIdPart) -> Self {
-        surrealdb::sql::Array::from(vec![value.r#type, value.id]).into()
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct Principal {
+    id: ResourceId,
+    event: Option<String>,
+}
+
+impl From<Principal> for surrealdb::sql::Value {
+    fn from(value: Principal) -> Self {
+        surrealdb::sql::Object::from(HashMap::from([
+            ("id", surrealdb::sql::Value::from(value.id)),
+            ("event", value.event.into()),
+        ]))
+        .into()
     }
 }
 
-fn surrealdb_thing_from_resource_id(value: ResourceId) -> surrealdb::sql::Value {
-    surrealdb::sql::Thing::from((
-        "resource",
-        surrealdb::sql::Id::from(
-            value
-                .into_iter()
-                .map(|id| surrealdb::sql::Value::from(id))
-                .collect::<surrealdb::sql::Array>(),
-        ),
-    ))
+fn surrealdb_value_from_principal_chain(principal_chain: Vec<Principal>) -> surrealdb::sql::Value {
+    surrealdb::sql::Array::from(
+        principal_chain
+            .into_iter()
+            .map(surrealdb::sql::Value::from)
+            .collect::<Vec<_>>(),
+    )
     .into()
 }
 
+// TODO: Implement deserializer to handle unknown fields. Serde's built-in
+// unknown field handling doesn't work with its flatten option.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ResourceTreeNode {
     #[serde(flatten)]
     id: ResourceIdPart,
@@ -59,7 +70,7 @@ struct Event {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EventCapture {
-    principals: Vec<ResourceId>,
+    principals: Vec<Principal>,
     resources: Vec<ResourceId>,
     events: Vec<Event>,
 }
@@ -190,41 +201,121 @@ fn upsert_resource_tree_node<'a, 'b>(
 }
 
 fn upsert_events<'a, 'b>(mut query: Query<'b, Db>, report: EventCapture) -> Query<'b, Db> {
+    let first_seen_at = report
+        .events
+        .iter()
+        .min_by_key(|&event| event.first_seen_at)
+        .unwrap()
+        .first_seen_at
+        .clone();
+
+    let last_seen_at = report
+        .events
+        .iter()
+        .max_by_key(|&event| event.last_seen_at)
+        .unwrap()
+        .last_seen_at
+        .clone();
+
+    let principal_chain_id_var = next_binding();
+    let principals_binding = next_binding();
+    let first_seen_at_binding = next_binding();
+    let last_seen_at_binding = next_binding();
+
+    let statement = format!(
+        "${principal_chain_id_var} = INSERT INTO principal_chain
+        (id, first_seen_at, last_seen_at)
+        VALUES (${principals_binding}, ${first_seen_at_binding}, ${last_seen_at_binding})
+        ON DUPLICATE KEY UPDATE last_seen_at = ${last_seen_at_binding}
+        RETURN id;"
+    );
+
+    let principals_value = surrealdb_value_from_principal_chain(report.principals.clone());
+    let first_seen_at_value = surrealdb::sql::Datetime::from(first_seen_at);
+    let last_seen_at_value = surrealdb::sql::Datetime::from(last_seen_at);
+
+    info!(
+        statement = statement,
+        principal_chain_id_var = principal_chain_id_var,
+        principals_binding = principals_binding,
+        principals_value = tracing::field::display(&principals_value),
+        principals_first_seen_binding = first_seen_at_binding,
+        principals_first_seen_at_value = tracing::field::display(&first_seen_at_value),
+        principals_last_seen_binding = last_seen_at_binding,
+        principals_last_seen_at_value = tracing::field::display(&last_seen_at_value),
+        "Principal chain insert statement"
+    );
+
+    query = query
+        .query(statement)
+        .bind((principals_binding, principals_value))
+        .bind((first_seen_at_binding, first_seen_at_value))
+        .bind((last_seen_at_binding, last_seen_at_value));
+
+    let last_principal = report.principals.last().map(Principal::clone);
+
     for principal in report.principals {
-        let principal_id = surrealdb_thing_from_resource_id(principal);
+        let has_direct_principal_chain_value = Some(&principal) == last_principal.as_ref();
+        let has_direct_principal_chain_update = if has_direct_principal_chain_value {
+            ", has_direct_principal_chain = true"
+        } else {
+            ""
+        };
+
+        let principal_id_value = surrealdb_thing_from_resource_id(principal.id);
 
         for resource in &report.resources {
-            let resource_id = surrealdb_thing_from_resource_id(resource.clone());
+            let resource_id_value = surrealdb_thing_from_resource_id(resource.clone());
 
             for event in &report.events {
-                let mut event_upsert = InsertStatement::default();
+                let principal_id_binding = next_binding();
+                let resource_id_binding = next_binding();
+                let type_binding = next_binding();
+                let has_direct_principal_chain_binding = next_binding();
+                let first_seen_at_binding = next_binding();
+                let last_seen_at_binding = next_binding();
 
-                event_upsert.relation = true;
+                let statement = format!(
+                    "INSERT RELATION INTO event
+                    (in, out, type, principal_chains, has_direct_principal_chain, first_seen_at, last_seen_at)
+                    VALUES (${principal_id_binding}, ${resource_id_binding}, ${type_binding}, [${principal_chain_id_var}[0].id], ${has_direct_principal_chain_binding}, ${first_seen_at_binding}, ${last_seen_at_binding})
+                    ON DUPLICATE KEY UPDATE principal_chains += ${principal_chain_id_var}[0].id, last_seen_at = ${last_seen_at_binding}{has_direct_principal_chain_update}
+                    RETURN NONE;"
+                );
 
-                event_upsert.into = Some(surrealdb::sql::Table::from("event").into());
+                let type_value = surrealdb::sql::Strand::from(event.r#type.as_str());
+                let first_seen_at_value = surrealdb::sql::Datetime::from(event.first_seen_at);
+                let last_seen_at_value = surrealdb::sql::Datetime::from(event.last_seen_at);
 
-                event_upsert.data = surrealdb::sql::Data::ValuesExpression(vec![vec![
-                    ("in".into(), principal_id.clone()),
-                    ("out".into(), resource_id.clone()),
-                    (
-                        "type".into(),
-                        surrealdb::sql::Strand::from(event.r#type.as_str()).into(),
-                    ),
-                    ("first_seen_at".into(), event.first_seen_at.into()),
-                    ("last_seen_at".into(), event.last_seen_at.into()),
-                ]]);
+                info!(
+                    statement = statement,
+                    principal_id_binding = principal_id_binding,
+                    principal_id_value = tracing::field::display(&principal_id_value),
+                    resource_id_binding = resource_id_binding,
+                    resource_id_value = tracing::field::display(&resource_id_value),
+                    type_binding = type_binding,
+                    type_value = tracing::field::display(&type_value),
+                    principal_chain_id_var = principal_chain_id_var,
+                    has_direct_principal_chain_binding = has_direct_principal_chain_binding,
+                    has_direct_principal_chain_value = has_direct_principal_chain_value,
+                    first_seen_at_binding = first_seen_at_binding,
+                    first_seen_at_value = tracing::field::display(&first_seen_at_value),
+                    last_seen_at_binding = last_seen_at_binding,
+                    last_seen_at_value = tracing::field::display(&last_seen_at_value),
+                    "Event insert statement"
+                );
 
-                event_upsert.update = Some(surrealdb::sql::Data::UpdateExpression(vec![(
-                    "last_seen_at".into(),
-                    surrealdb::sql::Operator::Equal,
-                    event.last_seen_at.into(),
-                )]));
-
-                event_upsert.output = Some(surrealdb::sql::Output::None);
-
-                info!("Event upsert: {event_upsert}");
-
-                query = query.query(event_upsert)
+                query = query
+                    .query(statement)
+                    .bind((principal_id_binding, principal_id_value.clone()))
+                    .bind((resource_id_binding, resource_id_value.clone()))
+                    .bind((type_binding, type_value))
+                    .bind((
+                        has_direct_principal_chain_binding,
+                        has_direct_principal_chain_value,
+                    ))
+                    .bind((first_seen_at_binding, first_seen_at_value))
+                    .bind((last_seen_at_binding, last_seen_at_value));
             }
         }
     }
@@ -249,6 +340,8 @@ pub(crate) async fn report(
     }
 
     query = query.query(CommitStatement::default());
+
+    info!("Full query:\n{query:?}");
 
     query.await?.check()?;
 

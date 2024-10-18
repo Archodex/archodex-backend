@@ -11,6 +11,12 @@ pub(crate) struct ResourceIdPart {
     pub(crate) id: String,
 }
 
+impl From<ResourceIdPart> for surrealdb::sql::Value {
+    fn from(value: ResourceIdPart) -> Self {
+        surrealdb::sql::Array::from(vec![value.r#type, value.id]).into()
+    }
+}
+
 impl TryFrom<surrealdb::sql::Array> for ResourceIdPart {
     type Error = anyhow::Error;
 
@@ -125,6 +131,31 @@ impl std::ops::Deref for ResourceId {
     }
 }
 
+impl From<ResourceId> for surrealdb::sql::Array {
+    fn from(value: ResourceId) -> Self {
+        surrealdb::sql::Array::from(
+            value
+                .into_iter()
+                .map(|part| surrealdb::sql::Value::from(part))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<ResourceId> for surrealdb::sql::Value {
+    fn from(value: ResourceId) -> Self {
+        surrealdb::sql::Array::from(value).into()
+    }
+}
+
+pub(crate) fn surrealdb_thing_from_resource_id(value: ResourceId) -> surrealdb::sql::Value {
+    surrealdb::sql::Thing::from((
+        "resource",
+        surrealdb::sql::Id::from(surrealdb::sql::Array::from(value)),
+    ))
+    .into()
+}
+
 impl TryFrom<surrealdb::sql::Array> for ResourceId {
     type Error = anyhow::Error;
 
@@ -132,7 +163,7 @@ impl TryFrom<surrealdb::sql::Array> for ResourceId {
         Ok(ResourceId(
             value.into_iter().map(|part| match part {
                 surrealdb::sql::Value::Array(part) => ResourceIdPart::try_from(part),
-                _ => bail!("ResourceId::from(surrealdb::sql::Array) called with a non-array ResourceIdPart element"),
+                _ => bail!("ResourceId::try_from::<surrealdb::sql::Array> called with a non-array ResourceIdPart element"),
             }).collect::<anyhow::Result<_>>()?
         ))
     }
