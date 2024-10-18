@@ -1,5 +1,4 @@
 use tracing::info;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[cfg(debug_assertions)]
 const RUNTIME_STACK_SIZE: usize = 20 * 1024 * 1024; // 20MiB in debug mode
@@ -8,11 +7,39 @@ const RUNTIME_STACK_SIZE: usize = 10 * 1024 * 1024; // 10MiB in release mode
 
 const PORT: u16 = 5731;
 
+fn setup_logging() {
+    use std::io::IsTerminal;
+    use tracing_subscriber::{
+        filter::{EnvFilter, LevelFilter},
+        fmt,
+    };
+
+    let color = std::io::stdout().is_terminal()
+        && (match std::env::var("COLORTERM") {
+            Ok(value) => value == "truecolor" || value == "24bit",
+            _ => false,
+        } || match std::env::var("TERM") {
+            Ok(value) => value == "direct" || value == "truecolor",
+            _ => false,
+        });
+
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
+
+    let fmt = fmt().with_env_filter(env_filter);
+
+    if color {
+        fmt.event_format(fmt::format().pretty())
+            .with_ansi(color)
+            .init();
+    } else {
+        fmt.with_ansi(false).init();
+    };
+}
+
 fn main() -> Result<(), std::io::Error> {
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,surreal=debug".into()))
-        .init();
+    setup_logging();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
