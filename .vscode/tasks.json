@@ -12,6 +12,26 @@
 				"isDefault": true
 			},
 			"label": "rust: cargo build"
+		},
+		{
+			"type": "cargo",
+			"command": "lambda",
+			"args": [
+				"build",
+				"--release",
+				"--arm64",
+				"--package",
+				"lambda",
+				"--output-format",
+				"zip"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build"
+			},
+			"label": "rust: cargo lambda build"
 		}
 	]
 }

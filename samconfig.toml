@@ -1,0 +1,15 @@
+version = 0.1
+
+[default]
+[default.global]
+[default.global.parameters]
+stack_name = "archodex-backend"
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+beta_features = true

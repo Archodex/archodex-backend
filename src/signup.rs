@@ -1,9 +1,13 @@
 use std::time::{Duration, Instant};
 
 use aws_sdk_dynamodb::{
-    operation::create_table::CreateTableError::ResourceInUseException,
+    operation::{
+        create_table::CreateTableError::ResourceInUseException,
+        update_continuous_backups::UpdateContinuousBackupsError,
+    },
     types::{
-        AttributeDefinition, BillingMode, KeySchemaElement, KeyType, ScalarAttributeType,
+        AttributeDefinition, BillingMode, KeySchemaElement, KeyType,
+        PointInTimeRecoverySpecification, ScalarAttributeType, SseSpecification, SseType,
         TableStatus,
     },
     Client,
@@ -12,9 +16,9 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 use surrealdb::{engine::local::Db, Surreal};
 use tokio::{sync::OnceCell, time::sleep};
-use tracing::{info, trace};
+use tracing::{error, info, trace};
 
-use crate::{auth::Principal, macros::*, Result};
+use crate::{auth::Principal, db::dynamodb_resources_table_name_for_account, macros::*, Result};
 
 static DYNAMODB_CLIENT: OnceCell<aws_sdk_dynamodb::Client> = OnceCell::const_new();
 
@@ -36,7 +40,7 @@ pub(crate) async fn signup(
     Json(_): Json<SignupRequest>,
 ) -> Result<()> {
     let client = ddb_client().await;
-    let table_name = format!("{}-resources", principal.account_id());
+    let table_name = dynamodb_resources_table_name_for_account(principal.account_id());
 
     info!("Creating DynamoDB table {table_name}...");
 
@@ -68,6 +72,14 @@ pub(crate) async fn signup(
                 .build()?,
         )
         .billing_mode(BillingMode::PayPerRequest)
+        .deletion_protection_enabled(true)
+        .sse_specification(
+            SseSpecification::builder()
+                .enabled(true)
+                .sse_type(SseType::Kms)
+                .kms_master_key_id("alias/ArchodexBackendCustomerDataKey")
+                .build(),
+        )
         .send()
         .await
     {
@@ -77,7 +89,9 @@ pub(crate) async fn signup(
         };
     }
 
-    info!("Waiting for table {table_name} to become active...");
+    info!("Table {table_name} created");
+
+    info!("Waiting for table {table_name} to become available...");
 
     let start = Instant::now();
 
@@ -99,7 +113,6 @@ pub(crate) async fn signup(
         trace!("Table {table_name} status is {status}");
 
         if status == &TableStatus::Active {
-            info!("Table {table_name} is now active");
             break;
         }
 
@@ -111,12 +124,57 @@ pub(crate) async fn signup(
         sleep(Duration::from_secs(1)).await;
     }
 
+    info!("Table {table_name} is available");
+
+    info!("Enabling Point In Time Recovery for table {table_name}...");
+
+    loop {
+        match client
+            .update_continuous_backups()
+            .table_name(&table_name)
+            .point_in_time_recovery_specification(
+                PointInTimeRecoverySpecification::builder()
+                    .point_in_time_recovery_enabled(true)
+                    .build()
+                    .expect(&format!(
+                        "Failed to build DynamoDB PITR specification for table {table_name}"
+                    )),
+            )
+            .send()
+            .await
+        {
+            Ok(_) => break,
+            Err(err) => match err.into_service_error() {
+                UpdateContinuousBackupsError::ContinuousBackupsUnavailableException(_) => (),
+                err => bail!("Failed to enable DynamoDB PITR for table {table_name}: {err:#?}"),
+            },
+        };
+
+        trace!(
+            "Table {table_name} is still enabling continuous backups, will retry enabling PITR..."
+        );
+
+        ensure!(
+            Instant::now().duration_since(start) <= Duration::from_secs(30),
+            "Table {table_name} failed to become available with PITR within 30 seconds"
+        );
+
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    info!("Point In Time Recovery enabled for table {table_name}");
+
     info!(
-        "Migrating 'resources' database for account {}",
+        "Migrating 'resources' database for account {}...",
         principal.account_id()
     );
 
-    migrator::migrate_account_resources_database(&db).await?;
+    while let Err(err) = migrator::migrate_account_resources_database(&db).await {
+        error!("{err:#?}");
+        bail!(err);
+    }
+
+    info!("Table {table_name} migrated and ready for use");
 
     Ok(())
 }

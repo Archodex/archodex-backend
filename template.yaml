@@ -1,0 +1,159 @@
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  CustomerDataKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Archodex backend customer data encryption key
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: kms:*
+            Resource: '*'
+            Condition:
+              ArnLike:
+                aws:PrincipalArn: !Sub arn:${AWS::Partition}::iam::${AWS::AccountId}:role/*
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+
+  CustomerDataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/ArchodexBackendCustomerDataKey
+      TargetKeyId: !Ref CustomerDataKey
+
+  AccountsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: B
+        - AttributeName: sk
+          AttributeType: B
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        KMSMasterKeyId: !Ref CustomerDataKeyAlias
+        SSEEnabled: true
+        SSEType: KMS
+      TableName: archodex-accounts
+
+  API:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: true
+    Properties:
+      FunctionName: archodex-backend-api
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: API
+      CodeUri: target/lambda/lambda/bootstrap.zip
+      Handler: bootstrap
+      Runtime: provided.al2023
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          ACCOUNTS_TABLE_NAME: !Ref AccountsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AccountsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:CreateTable
+                - dynamodb:UpdateContinuousBackups
+              Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/archodex-service-data-*
+            - Effect: Allow
+              Action: kms:DescribeKey
+              Resource: !GetAtt CustomerDataKey.Arn
+        - DynamoDBCrudPolicy:
+            TableName: archodex-service-data-*
+        - KMSDecryptPolicy:
+            KeyId: !Ref CustomerDataKey
+        - KMSEncryptPolicy:
+            KeyId: !Ref CustomerDataKey
+      Events:
+        RESTAPIANYproxy:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref RESTAPI
+
+  APILogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${API}
+      RetentionInDays: 30
+
+  RESTAPICertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
+          HostedZoneId: '{{resolve:ssm:/account_subdomain/hosted_zone_id}}'
+
+  RESTAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: archodex-backend-api
+      StageName: Prod
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: archodex-backend-api
+          version: 1
+        servers:
+          - url: https://api.{{resolve:ssm:/account_subdomain/domain}}
+            x-amazon-apigateway-endpoint-configuration:
+              disableExecuteApiEndpoint: true
+        paths:
+          /{proxy+}:
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${API.Arn}/invocations
+              responses: {}
+      DisableExecuteApiEndpoint: true
+      Domain:
+        DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
+        CertificateArn: !Ref RESTAPICertificate
+        Route53:
+          HostedZoneId: '{{resolve:ssm:/account_subdomain/hosted_zone_id}}'
+      EndpointConfiguration: REGIONAL
+      FailOnWarnings: true
+      TracingEnabled: true
