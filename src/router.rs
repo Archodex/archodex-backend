@@ -6,13 +6,14 @@ use tower_http::{
 };
 use tracing::Level;
 
-use crate::{auth::auth, db::db, query, report, signup};
+use crate::{auth::auth, db::db, principal_chain, query, report, signup};
 
 pub fn router() -> Router {
     Router::new()
         .route("/signup", post(signup::signup))
         .route("/report", post(report::report))
         .route("/query/:type", get(query::query))
+        .route("/principal_chain", get(principal_chain::get))
         .layer(
             ServiceBuilder::new()
                 .layer(

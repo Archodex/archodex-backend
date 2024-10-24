@@ -22,7 +22,8 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
-        "AWS_PROFILE": "ddbtest"
+        "AWS_PROFILE": "ddbtest",
+        "COLORTERM": "truecolor",
       }
     },
     {

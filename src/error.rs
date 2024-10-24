@@ -83,7 +83,7 @@ pub(super) mod macros {
         ($msg:literal $(,)?) => {
             bail!($crate::error::PublicError::new(
                 ::axum::http::StatusCode::BAD_REQUEST,
-                $msg,
+                format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
@@ -97,11 +97,29 @@ pub(super) mod macros {
     pub(crate) use bad_request;
 
     #[allow(unused_macros)]
+    macro_rules! not_found {
+        ($msg:literal $(,)?) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::NOT_FOUND,
+                format!($msg),
+            ))
+        };
+        ($fmt:expr, $($arg:tt)*) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::NOT_FOUND,
+                format!($fmt, $($arg)*),
+            ))
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use not_found;
+
+    #[allow(unused_macros)]
     macro_rules! conflict {
         ($msg:literal $(,)?) => {
             bail!($crate::error::PublicError::new(
                 ::axum::http::StatusCode::CONFLICT,
-                $msg,
+                format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {

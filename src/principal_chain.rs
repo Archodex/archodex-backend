@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
+use axum::{extract::Query, Extension, Json};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use surrealdb::{engine::local::Db, Surreal};
 
 use crate::{macros::*, resource::ResourceId};
 
@@ -8,6 +13,16 @@ pub(crate) struct PrincipalChainIdPart {
     pub(crate) id: ResourceId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) event: Option<String>,
+}
+
+impl From<PrincipalChainIdPart> for surrealdb::sql::Value {
+    fn from(value: PrincipalChainIdPart) -> Self {
+        surrealdb::sql::Object::from(HashMap::from([
+            ("id", value.id.into()),
+            ("event", value.event.into()),
+        ]))
+        .into()
+    }
 }
 
 impl TryFrom<surrealdb::sql::Object> for PrincipalChainIdPart {
@@ -58,6 +73,18 @@ impl TryFrom<surrealdb::sql::Array> for PrincipalChainId {
                 _ => bail!("PrincipalChainIdPart::try_from::<surrealdb::sql::Array> called with a non-object PrincipalChainIdPart element"),
             }).collect::<anyhow::Result<_>>()?
       ))
+    }
+}
+
+impl From<PrincipalChainId> for surrealdb::sql::Array {
+    fn from(value: PrincipalChainId) -> Self {
+        surrealdb::sql::Array::from(
+            value
+                .0
+                .into_iter()
+                .map(surrealdb::sql::Value::from)
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -149,46 +176,36 @@ impl<'de> Deserialize<'de> for PrincipalChainId {
     }
 }
 
-/*impl<'de> Deserialize<'de> for PrincipalChainIdPart {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct Visitor;
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct GetRequest {
+    id: String,
+}
 
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = PrincipalChainIdPart;
+#[derive(Debug, Deserialize, Serialize)]
+pub(super) struct GetResponse {
+    first_seen_at: DateTime<Utc>,
+    last_seen_at: DateTime<Utc>,
+}
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a PrincipalChainIdPart or a database event record")
-            }
+pub(super) async fn get(
+    Extension(db): Extension<Surreal<Db>>,
+    Query(GetRequest { id }): Query<GetRequest>,
+) -> crate::Result<Json<GetResponse>> {
+    let id: PrincipalChainId = match serde_json::from_str(&id) {
+        Ok(id) => id,
+        Err(err) => bad_request!("Invalid `id` query parameter: {err}"),
+    };
 
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut id: Option<ResourceId> = None;
-                let mut event: Option<String> = None;
+    let res = db
+        .query("SELECT first_seen_at, last_seen_at FROM type::thing('principal_chain', $id)")
+        .bind(("id", surrealdb::sql::Array::from(id)))
+        .await?
+        .check()?
+        .take(0)?;
 
-                while let Some(key) = map.next_key::<String>()? {
-                    match key.as_str() {
-                        "id" if id.is_none() => id = Some(map.next_value()?),
-                        "id" => Err(serde::de::Error::duplicate_field("in"))?,
-                        "event" if event.is_none() => event = Some(map.next_value()?),
-                        "event" => Err(serde::de::Error::duplicate_field("event"))?,
-                        _ => {
-                            return Err(serde::de::Error::unknown_field(&key, &["id", "event"]));
-                        }
-                    }
-                }
-
-                Ok(Self::Value {
-                    id: id.ok_or_else(|| serde::de::Error::missing_field("id"))?,
-                    event,
-                })
-            }
-        }
-
-        deserializer.deserialize_map(Visitor)
+    match res {
+        Some(res) => Ok(Json(res)),
+        None => not_found!("Principal chain does not exist"),
     }
-}*/
+}
