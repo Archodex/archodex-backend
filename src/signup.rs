@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use aws_sdk_dynamodb::{
+    error::ProvideErrorMetadata,
     operation::{
         create_table::CreateTableError::ResourceInUseException,
         update_continuous_backups::UpdateContinuousBackupsError,
@@ -16,7 +17,7 @@ use axum::{Extension, Json};
 use serde::Deserialize;
 use surrealdb::{engine::local::Db, Surreal};
 use tokio::{sync::OnceCell, time::sleep};
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::{auth::Principal, db::dynamodb_resources_table_name_for_account, macros::*, Result};
 
@@ -146,6 +147,10 @@ pub(crate) async fn signup(
             Ok(_) => break,
             Err(err) => match err.into_service_error() {
                 UpdateContinuousBackupsError::ContinuousBackupsUnavailableException(_) => (),
+                err if err.code() == Some("UnknownOperationException") => {
+                    warn!("Ignoring DynamoDB Point In Time Recovery unknown operation error, which is expected with DynamoDB Local");
+                    break;
+                }
                 err => bail!("Failed to enable DynamoDB PITR for table {table_name}: {err:#?}"),
             },
         };
