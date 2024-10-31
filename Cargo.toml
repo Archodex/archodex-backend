@@ -10,6 +10,7 @@ axum = { version = "0.7.7", default-features = false, features = ["http1", "http
 surrealdb = { version = "2", default-features = false, features = ["kv-dynamodb", "rustls"] }
 tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.40", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [package]
 name = "archodex-backend"

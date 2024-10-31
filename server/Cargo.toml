@@ -10,4 +10,4 @@ archodex-backend = { path = ".." }
 axum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber.workspace = true

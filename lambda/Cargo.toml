@@ -11,3 +11,4 @@ async-channel = "2.3.1"
 futures-lite = { version = "2.3.0", default-features = false, features = ["std"] }
 lambda_http = { version = "0.11.1", default-features = false, features = ["apigw_rest", "tracing"] }
 tokio.workspace = true
+tracing-subscriber.workspace = true

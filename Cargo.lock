@@ -2122,6 +2122,7 @@ dependencies = [
  "futures-lite",
  "lambda_http",
  "tokio",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3937,7 +3938,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "surrealdb"
 version = "2.0.4"
-source = "git+https://github.com/txase/surrealdb.git#967f822304c80faa08803a5f762b99296f95479e"
+source = "git+https://github.com/txase/surrealdb.git#a80890aacd432ac86eb3cd83b798e5e9564c92e4"
 dependencies = [
  "arrayvec",
  "async-channel 1.9.0",
@@ -3976,7 +3977,7 @@ dependencies = [
 [[package]]
 name = "surrealdb-core"
 version = "2.0.4"
-source = "git+https://github.com/txase/surrealdb.git#967f822304c80faa08803a5f762b99296f95479e"
+source = "git+https://github.com/txase/surrealdb.git#a80890aacd432ac86eb3cd83b798e5e9564c92e4"
 dependencies = [
  "addr",
  "ahash 0.8.11",

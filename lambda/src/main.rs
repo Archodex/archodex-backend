@@ -3,8 +3,24 @@ use std::{env, io, thread};
 use futures_lite::future;
 use tokio::runtime::Builder;
 
+fn setup_logging() {
+    use tracing_subscriber::{filter::EnvFilter, fmt};
+
+    let env_filter = if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        EnvFilter::builder().parse_lossy(rust_log)
+    } else {
+        EnvFilter::builder()
+            .parse("surrealdb_core::kvs::dynamodb=debug,info")
+            .unwrap()
+    };
+
+    let fmt = fmt().with_env_filter(env_filter);
+
+    fmt.with_ansi(false).init();
+}
+
 fn main() -> Result<(), io::Error> {
-    lambda_http::tracing::init_default_subscriber();
+    setup_logging();
 
     env::set_var("AWS_LAMBDA_HTTP_IGNORE_STAGE_IN_PATH", "true");
 
