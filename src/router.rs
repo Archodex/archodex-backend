@@ -1,4 +1,4 @@
-use axum::{middleware, routing::*, Router};
+use axum::{http::header::CONTENT_TYPE, middleware, routing::*, Router};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{AllowMethods, AllowOrigin, CorsLayer},
@@ -19,7 +19,8 @@ pub fn router() -> Router {
                 .layer(
                     CorsLayer::new()
                         .allow_methods(AllowMethods::any())
-                        .allow_origin(AllowOrigin::any()),
+                        .allow_origin(AllowOrigin::any())
+                        .allow_headers([CONTENT_TYPE]),
                 )
                 .layer(middleware::from_fn(auth))
                 .layer(middleware::from_fn(db)),
