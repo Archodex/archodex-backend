@@ -30,6 +30,23 @@
 				"isDefault": true,
 			},
 			"label": "rust: cargo lambda build"
+		},
+		{
+			"type": "process",
+			"command": "act",
+			"args": [
+				"--var",
+				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
+				"--platform",
+				"ubuntu-latest=-self-hosted",
+				"--env",
+				"AWS_PROFILE=archodex-dev-AdministratorAccess",
+			],
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+			},
+			"label": "act: Run GitHub Actions Workflow deploy.yml locally"
 		}
 	]
 }

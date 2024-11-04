@@ -1,0 +1,55 @@
+name: Deploy
+
+on: workflow_dispatch
+#  push:
+#    branches:
+#      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
+    steps:
+      - name: Checkout code
+        if: ${{ !env.ACT }}
+        uses: actions/checkout@v4
+
+      - name: Build with Cargo
+        run: cargo lambda build --release --arm64 --package lambda --output-format zip
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
+    strategy:
+      matrix:
+        region:
+          - us-west-2
+          - us-east-1
+    steps:
+      - name: Upload Lambda API function zip package to regional backend deployment asset buckets
+        run: |-
+          aws s3 sync --sse AES256 \
+          target/lambda/lambda \
+          "s3://cloudformation-deployment-assets-$(aws sts get-caller-identity --query Account --output text)-${{matrix.region}}/backend/api/bootstrap.zip" \
+          --exclude='*' \
+          --include='*/bootstrap.zip'
+
+  deploy:
+    needs: upload
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
+    steps:
+      - name: Deploy CloudFormation stack
+        run: |-
+          aws cloudformation create-change-set \
+            --stack-name archodex-backend \
+            --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S%z)" \
+            --template-body file://template.yaml \
+            --capabilities CAPABILITY_NAMED_IAM

@@ -7,29 +7,29 @@ Resources:
       Description: Archodex backend customer data encryption key
       EnableKeyRotation: true
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
             Action: kms:*
-            Resource: '*'
+            Resource: "*"
           - Effect: Allow
             Principal:
-              AWS: '*'
+              AWS: "*"
             Action: kms:*
-            Resource: '*'
+            Resource: "*"
             Condition:
               ArnLike:
                 aws:PrincipalArn: !Sub arn:${AWS::Partition}::iam::${AWS::AccountId}:role/*
           - Effect: Allow
             Principal:
-              AWS: '*'
+              AWS: "*"
             Action:
               - kms:CreateGrant
               - kms:ListGrants
               - kms:RevokeGrant
-            Resource: '*'
+            Resource: "*"
             Condition:
               Bool:
                 kms:GrantIsForAWSResource: true
@@ -40,120 +40,685 @@ Resources:
       AliasName: alias/ArchodexBackendCustomerDataKey
       TargetKeyId: !Ref CustomerDataKey
 
-  AccountsTable:
-    Type: AWS::DynamoDB::Table
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
     Properties:
-      AttributeDefinitions:
-        - AttributeName: pk
-          AttributeType: B
-        - AttributeName: sk
-          AttributeType: B
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
-      KeySchema:
-        - AttributeName: pk
-          KeyType: HASH
-        - AttributeName: sk
-          KeyType: RANGE
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        KMSMasterKeyId: !Ref CustomerDataKeyAlias
-        SSEEnabled: true
-        SSEType: KMS
-      TableName: archodex-accounts
-
-  API:
-    Type: AWS::Serverless::Function
-    Metadata:
-      SkipBuild: true
-    Properties:
-      FunctionName: archodex-backend-api
-      Description: !Sub
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: API
-      CodeUri: target/lambda/lambda/bootstrap.zip
-      Handler: bootstrap
-      Runtime: provided.al2023
-      MemorySize: 3008
-      Timeout: 30
-      Tracing: Active
-      Architectures:
-        - arm64
-      Environment:
-        Variables:
-          ACCOUNTS_TABLE_NAME: !Ref AccountsTable
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AutoVerifiedAttributes:
+        - email
+      DeletionProtection: ACTIVE
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      MfaConfiguration: OPTIONAL
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AccountsTable
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:CreateTable
-                - dynamodb:UpdateContinuousBackups
-              Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/archodex-service-data-*
-            - Effect: Allow
-              Action: kms:DescribeKey
-              Resource: !GetAtt CustomerDataKey.Arn
-        - DynamoDBCrudPolicy:
-            TableName: archodex-service-data-*
-        - KMSDecryptPolicy:
-            KeyId: !Ref CustomerDataKey
-        - KMSEncryptPolicy:
-            KeyId: !Ref CustomerDataKey
-      Events:
-        RESTAPIANYproxy:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-            RestApiId: !Ref RESTAPI
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireNumbers: false
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireSymbols: false
+      Schema:
+        - AttributeDataType: String
+          Name: endpoint
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      UserPoolName: archodex
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
 
-  APILogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
+  CognitoUserPoolAppClient:
+    Type: AWS::Cognito::UserPoolClient
     Properties:
-      LogGroupName: !Sub /aws/lambda/${API}
-      RetentionInDays: 30
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+      CallbackURLs:
+        - https://app.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
+        - http://localhost:5173/oauth2/idpresponse
+      ClientName: app
+      DefaultRedirectURI: https://app.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      ReadAttributes:
+        - custom:endpoint
+      RefreshTokenValidity: 1
+      SupportedIdentityProviders:
+        - COGNITO
+      UserPoolId: !Ref CognitoUserPool
+      WriteAttributes:
+        - email
 
-  RESTAPICertificate:
-    Type: AWS::CertificateManager::Certificate
+  USEast1StackSetExecutionRole:
+    Type: AWS::IAM::Role
     Properties:
-      DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
-          HostedZoneId: '{{resolve:ssm:/account_subdomain/hosted_zone_id}}'
+      RoleName: ArchodexBackendUSEast1StackSetExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/CrossRegionParameterCustomResourcesAdministratorAccess
+      Policies:
+        - PolicyName: ManageStacks
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CancelUpdateStack
+                  - cloudformation:ContinueUpdateRollback
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:RollbackStack
+                  - cloudformation:TagResource
+                  - cloudformation:UntagResource
+                  - cloudformation:UpdateStack
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/StackSet-${AWS::StackName}-us-east-1-*
+        - PolicyName: ReadCrossRegionParameterCustomResourceTokenParameter
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameters
+                Resource: !Sub arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/cross_region_parameter_custom_resource_service_token
+        - PolicyName: ManageCognitoACMCertificate
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm:AddTagsToCertificate
+                  - acm:DeleteCertificate
+                  - acm:DescribeCertificate
+                  - acm:ListTagsForCertificate
+                  - acm:RemoveTagsFromCertificate
+                  - acm:RequestCertificate
+                  - acm:UpdateCertificateOptions
+                Resource: "*"
+                Condition:
+                  ForAllValues:StringEquals:
+                    acm:DomainNames: auth.{{resolve:ssm:/account_subdomain/domain}}
+        - PolicyName: ManageCognitoACMRoute53Record
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - route53:ChangeResourceRecordSets
+                Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/{{resolve:ssm:/account_subdomain/hosted_zone_id}}
+                Condition:
+                  ForAllValues:StringLike:
+                    route53:ResourceRecordSet: "*.auth.{{resolve:ssm:/account_subdomain/domain}}"
+                  ForAllValues:StringEquals:
+                    route53:ResourceRecordSetType: CNAME
 
-  RESTAPI:
-    Type: AWS::Serverless::Api
+  USEast1StackSetAdministrationRole:
+    Type: AWS::IAM::Role
     Properties:
-      Name: archodex-backend-api
-      StageName: Prod
-      DefinitionBody:
-        openapi: 3.0.1
-        info:
-          title: archodex-backend-api
-          version: 1
-        servers:
-          - url: https://api.{{resolve:ssm:/account_subdomain/domain}}
-            x-amazon-apigateway-endpoint-configuration:
-              disableExecuteApiEndpoint: true
-        paths:
-          /{proxy+}:
-            x-amazon-apigateway-any-method:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${API.Arn}/invocations
-              responses: {}
-      DisableExecuteApiEndpoint: true
-      Domain:
-        DomainName: api.{{resolve:ssm:/account_subdomain/domain}}
-        CertificateArn: !Ref RESTAPICertificate
-        Route53:
-          HostedZoneId: '{{resolve:ssm:/account_subdomain/hosted_zone_id}}'
-      EndpointConfiguration: REGIONAL
-      FailOnWarnings: true
-      TracingEnabled: true
+      RoleName: ArchodexBackendUSEast1StackSetAdministrationRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub cloudformation.${AWS::URLSuffix}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              StringLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${AWS::StackName}-us-east-1:*
+      Policies:
+        - PolicyName: ExecuteStackSet
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !GetAtt USEast1StackSetExecutionRole.Arn
+
+  CrossRegionArchodexEnvironmentStacks:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      AdministrationRoleARN: !GetAtt USEast1StackSetAdministrationRole.Arn
+      ExecutionRoleName: !Ref USEast1StackSetExecutionRole
+      ManagedExecution:
+        Active: true
+      OperationPreferences:
+        FailureToleranceCount: 0
+        MaxConcurrentCount: 1
+        RegionConcurrencyType: PARALLEL
+      Parameters:
+        - ParameterKey: ParentStackName
+          ParameterValue: !Ref AWS::StackName
+        - ParameterKey: ParentStackRegion
+          ParameterValue: !Ref AWS::Region
+        - ParameterKey: Domain
+          ParameterValue: "{{resolve:ssm:/account_subdomain/domain}}"
+        - ParameterKey: HostedZoneId
+          ParameterValue: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      PermissionModel: SELF_MANAGED
+      StackInstancesGroup:
+        - DeploymentTargets:
+            Accounts:
+              - !Ref AWS::AccountId
+          Regions:
+            - us-east-1
+      StackSetName: !Sub ${AWS::StackName}-us-east-1
+      TemplateBody: |-
+        Parameters:
+          ParentStackName:
+            Type: String
+            Description: Parent stack name
+          ParentStackRegion:
+            Type: String
+            Description: Parent stack region
+          Domain:
+            Type: String
+            Description: Archodex environment domain name
+          HostedZoneId:
+            Type: String
+            Description: Archodex environment Route53 Hosted Zone ID
+
+        Resources:
+          CognitoDomainCertificate:
+            Type: AWS::CertificateManager::Certificate
+            Properties:
+              DomainName: !Sub auth.${Domain}
+              ValidationMethod: DNS
+              DomainValidationOptions:
+                - DomainName: !Sub auth.${Domain}
+                  HostedZoneId: !Ref HostedZoneId
+
+          CognitoDomainCertificateParameter:
+            Type: Custom::CrossRegionSSMParameter
+            Properties:
+              # Use unicode character escape to prevent parent stack dynamic referencing
+              ServiceToken: "{\u007Bresolve:ssm:/cross_region_parameter_custom_resource_service_token}}"
+              ServiceTimeout: 10
+              Region: !Ref ParentStackRegion
+              Description: Archodex Cognito Domain us-east-1 ACM Certificate ARN
+              Name: !Sub /${ParentStackName}/cognito_domain_certificate
+              Type: String
+              Value: !Ref CognitoDomainCertificate
+
+  CognitoUserPoolDomain:
+    DependsOn: CrossRegionArchodexEnvironmentStacks
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      CustomDomainConfig:
+        CertificateArn: "{{resolve:ssm:/archodex-backend/cognito_domain_certificate}}"
+      Domain: auth.{{resolve:ssm:/account_subdomain/domain}}
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoUserPoolDomainDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      Name: auth.{{resolve:ssm:/account_subdomain/domain}}
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt CognitoUserPoolDomain.CloudFrontDistribution
+
+  APIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: CreateCustomerTables
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:UpdateContinuousBackups
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-service-data-*
+        - PolicyName: ReadWriteAccountAndCustomerTables
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:ConditionCheckItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-accounts-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-service-data-*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:CalledViaLast: !Sub dynamodb.${AWS::URLSuffix}
+
+  RegionalBackendsStackSetExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RegionalBackendsStackSetExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ManageStacks
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CancelUpdateStack
+                  - cloudformation:ContinueUpdateRollback
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:RollbackStack
+                  - cloudformation:TagResource
+                  - cloudformation:UntagResource
+                  - cloudformation:UpdateStack
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/StackSet-${AWS::StackName}-regional-backends-*
+                  - !Sub arn:${AWS::Partition}:cloudformation:*:aws:transform/Serverless-2016-10-31
+        - PolicyName: ManageCustomerDataKMSKey
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:CreateAlias
+                  - kms:CreateKey
+                  - kms:DeleteAlias
+                  - kms:DisableKey
+                  - kms:DisableKeyRotation
+                  - kms:EnableKey
+                  - kms:EnableKeyRotation
+                  - kms:GetKeyPolicy
+                  - kms:GetKeyRotationStatus
+                  - kms:ListResourceTags
+                  - kms:PutKeyPolicy
+                  - kms:ScheduleKeyDeletion
+                  - kms:TagResource
+                  - kms:UntagResource
+                  - kms:UpdateAlias
+                  - kms:UpdateKeyDescription
+                Resource:
+                  - !Sub arn:${AWS::Partition}:kms:*:${AWS::AccountId}:key/*
+                  - !Sub arn:${AWS::Partition}:kms:*:${AWS::AccountId}:alias/ArchodexBackendCustomerDataKey
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:RequestAlias: alias/ArchodexBackendCustomerDataKey
+        - PolicyName: ManageAccountsTable
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DeleteTable
+                  - dynamodb:DescribeContinuousBackups
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeTimeToLive
+                  - dynamodb:ListTagsOfResource
+                  - dynamodb:TagResource
+                  - dynamodb:UntagResource
+                  - dynamodb:UpdateContinuousBackups
+                  - dynamodb:UpdateTable
+                  - dynamodb:UpdateTimeToLive
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-accounts-*
+        - PolicyName: ManageAPIFunction
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:GetPolicy
+                  - lambda:ListTags
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:UntagResource
+                  - lambda:UpdateFunctionCode
+                Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:archodex-backend-api
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-${AWS::Region}/backend/api/bootstrap.zip
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt APIRole.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DeleteRetentionPolicy
+                  - logs:PutRetentionPolicy
+                Resource:
+                  - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/archodex-backend-api
+                  - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/archodex-backend-api:*
+        - PolicyName: ManageAPIACMCertificate
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm:AddTagsToCertificate
+                  - acm:DeleteCertificate
+                  - acm:DescribeCertificate
+                  - acm:ListTagsForCertificate
+                  - acm:RemoveTagsFromCertificate
+                  - acm:RequestCertificate
+                  - acm:UpdateCertificateOptions
+                Resource: "*"
+                Condition:
+                  ForAllValues:StringLike:
+                    acm:DomainNames: api.*.{{resolve:ssm:/account_subdomain/domain}}
+        - PolicyName: ManageAPIRoute53Records
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ManageACMDNSVerificationRecords
+                Effect: Allow
+                Action: route53:ChangeResourceRecordSets
+                Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/{{resolve:ssm:/account_subdomain/hosted_zone_id}}
+                Condition:
+                  ForAllValues:StringLike:
+                    route53:ResourceRecordSet: "*.api.*.{{resolve:ssm:/account_subdomain/domain}}"
+                  ForAllValues:StringEquals:
+                    route53:ResourceRecordSetType: CNAME
+              - Sid: GetHostedZoneForAPIGatewayDomain
+                Effect: Allow
+                Action: route53:GetHostedZone
+                Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/{{resolve:ssm:/account_subdomain/hosted_zone_id}}
+              - Sid: GetChangeStatusForAPIGatewayDomain
+                Effect: Allow
+                Action: route53:GetChange
+                Resource: !Sub arn:${AWS::Partition}:route53:::change/*
+              - Sid: ManageAPICustomDomainRecords
+                Effect: Allow
+                Action: route53:ChangeResourceRecordSets
+                Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/{{resolve:ssm:/account_subdomain/hosted_zone_id}}
+                Condition:
+                  ForAllValues:StringLike:
+                    route53:ResourceRecordSet: "api.*.{{resolve:ssm:/account_subdomain/domain}}"
+                  ForAllValues:StringEquals:
+                    route53:ResourceRecordSetType: A
+        - PolicyName: ManageApiGateway
+          PolicyDocument:
+            Version: "2012-10-17"
+            # REST APIs are impossible to scope permissions for, so we have to allow all actions
+            Statement:
+              - Effect: Allow
+                Action: apigateway:*
+                Resource: "*"
+
+  RegionalBackendsStackSetAdministrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RegionalBackendsStackSetAdministrationRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub cloudformation.${AWS::URLSuffix}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              StringLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${AWS::StackName}-regional-backends:*
+      Policies:
+        - PolicyName: ExecuteStackSet
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !GetAtt RegionalBackendsStackSetExecutionRole.Arn
+
+  RegionalBackendsStacks:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      AdministrationRoleARN: !GetAtt RegionalBackendsStackSetAdministrationRole.Arn
+      Capabilities:
+        - CAPABILITY_AUTO_EXPAND
+      ExecutionRoleName: !Ref RegionalBackendsStackSetExecutionRole
+      ManagedExecution:
+        Active: true
+      OperationPreferences:
+        FailureToleranceCount: 0
+        MaxConcurrentCount: 1
+        RegionConcurrencyType: PARALLEL
+      Parameters:
+        - ParameterKey: ParentStackRegion
+          ParameterValue: !Ref AWS::Region
+        - ParameterKey: Domain
+          ParameterValue: "{{resolve:ssm:/account_subdomain/domain}}"
+        - ParameterKey: HostedZoneId
+          ParameterValue: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+        - ParameterKey: APIRoleArn
+          ParameterValue: !GetAtt APIRole.Arn
+      PermissionModel: SELF_MANAGED
+      StackInstancesGroup:
+        - DeploymentTargets:
+            Accounts:
+              - !Ref AWS::AccountId
+          Regions:
+            - us-west-2
+      StackSetName: !Sub ${AWS::StackName}-regional-backends
+      TemplateBody: |-
+        Transform: AWS::Serverless-2016-10-31
+
+        Parameters:
+          ParentStackRegion:
+            Type: String
+            Description: Parent stack region
+          Domain:
+            Type: String
+            Description: Archodex environment domain name
+          HostedZoneId:
+            Type: String
+            Description: Archodex environment Route53 Hosted Zone ID
+          APIRoleArn:
+            Type: String
+            Description: API Lambda Function IAM Role ARN
+
+        Conditions:
+          CreateRegionalKey: !Not
+            - !Equals
+              - !Ref AWS::Region
+              - !Ref ParentStackRegion
+
+        Resources:
+          CustomerDataKey:
+            Condition: CreateRegionalKey
+            Type: AWS::KMS::Key
+            Properties:
+              Description: Archodex backend customer data encryption key
+              EnableKeyRotation: true
+              KeyPolicy:
+                Version: "2012-10-17"
+                Statement:
+                  - Effect: Allow
+                    Principal:
+                      AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+                    Action: kms:*
+                    Resource: "*"
+                  - Effect: Allow
+                    Principal:
+                      AWS: "*"
+                    Action: kms:*
+                    Resource: "*"
+                    Condition:
+                      ArnLike:
+                        aws:PrincipalArn: !Sub arn:${AWS::Partition}::iam::${AWS::AccountId}:role/*
+                  - Effect: Allow
+                    Principal:
+                      AWS: "*"
+                    Action:
+                      - kms:CreateGrant
+                      - kms:ListGrants
+                      - kms:RevokeGrant
+                    Resource: "*"
+                    Condition:
+                      Bool:
+                        kms:GrantIsForAWSResource: true
+
+          CustomerDataKeyAlias:
+            Condition: CreateRegionalKey
+            Type: AWS::KMS::Alias
+            Properties:
+              AliasName: alias/ArchodexBackendCustomerDataKey
+              TargetKeyId: !Ref CustomerDataKey
+
+          AccountsTable:
+            Type: AWS::DynamoDB::Table
+            Properties:
+              AttributeDefinitions:
+                - AttributeName: pk
+                  AttributeType: B
+                - AttributeName: sk
+                  AttributeType: B
+              BillingMode: PAY_PER_REQUEST
+              DeletionProtectionEnabled: true
+              KeySchema:
+                - AttributeName: pk
+                  KeyType: HASH
+                - AttributeName: sk
+                  KeyType: RANGE
+              PointInTimeRecoverySpecification:
+                PointInTimeRecoveryEnabled: true
+              SSESpecification:
+                KMSMasterKeyId: !If
+                  - CreateRegionalKey
+                  - !Ref CustomerDataKeyAlias
+                  - alias/ArchodexBackendCustomerDataKey
+                SSEEnabled: true
+                SSEType: KMS
+              TableName: !Sub archodex-accounts-${AWS::Region}
+
+          API:
+            Type: AWS::Lambda::Function
+            Properties:
+              Architectures:
+                - arm64
+              Code:
+                S3Bucket: !Sub cloudformation-deployment-assets-${AWS::AccountId}-${AWS::Region}
+                S3Key: backend/api/bootstrap.zip
+              FunctionName: archodex-backend-api
+              Handler: bootstrap
+              MemorySize: 3008
+              Role: !Ref APIRoleArn
+              Runtime: provided.al2023
+              Timeout: 30
+              TracingConfig:
+                Mode: Active
+          
+          APIRESTAPIANYproxyPermissionProd:
+            Type: AWS::Lambda::Permission
+            Properties:
+              Action: lambda:InvokeFunction
+              FunctionName: !Ref API
+              Principal: !Sub apigateway.${AWS::URLSuffix}
+              SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RESTAPI}/Prod/*/*
+          
+          APILogGroup:
+            Type: AWS::Logs::LogGroup
+            DeletionPolicy: Retain
+            Properties:
+              LogGroupName: !Sub /aws/lambda/${API}
+              RetentionInDays: 30
+
+          RESTAPICertificate:
+            Type: AWS::CertificateManager::Certificate
+            Properties:
+              DomainName: !Sub api.${AWS::Region}.${Domain}
+              ValidationMethod: DNS
+              DomainValidationOptions:
+                - DomainName: !Sub api.${AWS::Region}.${Domain}
+                  HostedZoneId: !Ref HostedZoneId
+
+          RESTAPI:
+            Type: AWS::Serverless::Api
+            Properties:
+              Name: archodex-backend-api
+              StageName: Prod
+              DefinitionBody:
+                openapi: 3.0.1
+                info:
+                  title: archodex-backend-api
+                  version: 1
+                servers:
+                  - url: !Sub https://api.${AWS::Region}.${Domain}
+                    x-amazon-apigateway-endpoint-configuration:
+                      disableExecuteApiEndpoint: true
+                paths:
+                  /{proxy+}:
+                    x-amazon-apigateway-any-method:
+                      x-amazon-apigateway-integration:
+                        httpMethod: POST
+                        type: aws_proxy
+                        uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${API.Arn}/invocations
+                      responses: {}
+              DisableExecuteApiEndpoint: true
+              Domain:
+                DomainName: !Sub api.${AWS::Region}.${Domain}
+                CertificateArn: !Ref RESTAPICertificate
+                Route53:
+                  HostedZoneId: !Ref HostedZoneId
+              EndpointConfiguration: REGIONAL
+              FailOnWarnings: true
+              TracingEnabled: true
