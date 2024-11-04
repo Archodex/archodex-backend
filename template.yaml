@@ -1,5 +1,10 @@
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  CustomerDataRegions:
+    Type: CommaDelimitedList
+    Description: Regions where customer accounts may be provisioned
+
 Resources:
   CustomerDataKey:
     Type: AWS::KMS::Key
@@ -369,10 +374,13 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
+                Action: kms:CreateKey
+                Resource: "*"
+              - Effect: Allow
                 Action:
                   - kms:CreateAlias
-                  - kms:CreateKey
                   - kms:DeleteAlias
+                  - kms:DescribeKey
                   - kms:DisableKey
                   - kms:DisableKeyRotation
                   - kms:EnableKey
@@ -392,7 +400,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - kms:Decrypt
-                  - kms:DescribeKey
                   - kms:Encrypt
                 Resource: "*"
                 Condition:
@@ -426,16 +433,18 @@ Resources:
                   - lambda:CreateFunction
                   - lambda:DeleteFunction
                   - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
                   - lambda:GetPolicy
                   - lambda:ListTags
                   - lambda:RemovePermission
                   - lambda:TagResource
                   - lambda:UntagResource
                   - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
                 Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:archodex-backend-api
               - Effect: Allow
                 Action: s3:GetObject
-                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-${AWS::Region}/backend/api/bootstrap.zip
+                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-*/backend/api/bootstrap.zip
               - Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt APIRole.Arn
@@ -556,8 +565,7 @@ Resources:
         - DeploymentTargets:
             Accounts:
               - !Ref AWS::AccountId
-          Regions:
-            - us-west-2
+          Regions: !Ref CustomerDataRegions
       StackSetName: !Sub ${AWS::StackName}-regional-backends
       TemplateBody: |-
         Transform: AWS::Serverless-2016-10-31

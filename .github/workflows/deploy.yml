@@ -52,4 +52,5 @@ jobs:
             --stack-name archodex-backend \
             --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S%z)" \
             --template-body file://template.yaml \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameters ParameterKey=CustomerDataRegions,ParameterValue=\"us-west-2,us-east-1\"
