@@ -6,45 +6,6 @@ Parameters:
     Description: Regions where customer accounts may be provisioned
 
 Resources:
-  CustomerDataKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: Archodex backend customer data encryption key
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: "*"
-          - Effect: Allow
-            Principal:
-              AWS: "*"
-            Action: kms:*
-            Resource: "*"
-            Condition:
-              ArnLike:
-                aws:PrincipalArn: !Sub arn:${AWS::Partition}::iam::${AWS::AccountId}:role/*
-          - Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - kms:CreateGrant
-              - kms:ListGrants
-              - kms:RevokeGrant
-            Resource: "*"
-            Condition:
-              Bool:
-                kms:GrantIsForAWSResource: true
-
-  CustomerDataKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: alias/ArchodexBackendCustomerDataKey
-      TargetKeyId: !Ref CustomerDataKey
-
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -369,37 +330,22 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/StackSet-${AWS::StackName}-regional-backends-*
                   - !Sub arn:${AWS::Partition}:cloudformation:*:aws:transform/Serverless-2016-10-31
-        - PolicyName: ManageCustomerDataKMSKey
+        - PolicyName: UseCustomerDataKMSKey
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: kms:CreateKey
-                Resource: "*"
-              - Effect: Allow
                 Action:
-                  - kms:CreateAlias
-                  - kms:DeleteAlias
-                  - kms:DescribeKey
-                  - kms:DisableKey
-                  - kms:DisableKeyRotation
-                  - kms:EnableKey
-                  - kms:EnableKeyRotation
-                  - kms:GetKeyPolicy
-                  - kms:GetKeyRotationStatus
-                  - kms:ListResourceTags
-                  - kms:PutKeyPolicy
-                  - kms:ScheduleKeyDeletion
-                  - kms:TagResource
-                  - kms:UntagResource
-                  - kms:UpdateAlias
-                  - kms:UpdateKeyDescription
-                Resource:
-                  - !Sub arn:${AWS::Partition}:kms:*:${AWS::AccountId}:key/*
-                  - !Sub arn:${AWS::Partition}:kms:*:${AWS::AccountId}:alias/ArchodexBackendCustomerDataKey
+                  - kms:CreateGrant
+                  - kms:RevokeGrant
+                Resource: "*"
+                Condition:
+                  Bool:
+                    kms:GrantIsForAWSResource: true
               - Effect: Allow
                 Action:
                   - kms:Decrypt
+                  - kms:DescribeKey
                   - kms:Encrypt
                 Resource: "*"
                 Condition:
@@ -552,8 +498,6 @@ Resources:
         MaxConcurrentCount: 1
         RegionConcurrencyType: PARALLEL
       Parameters:
-        - ParameterKey: ParentStackRegion
-          ParameterValue: !Ref AWS::Region
         - ParameterKey: Domain
           ParameterValue: "{{resolve:ssm:/account_subdomain/domain}}"
         - ParameterKey: HostedZoneId
@@ -571,9 +515,6 @@ Resources:
         Transform: AWS::Serverless-2016-10-31
 
         Parameters:
-          ParentStackRegion:
-            Type: String
-            Description: Parent stack region
           Domain:
             Type: String
             Description: Archodex environment domain name
@@ -584,54 +525,7 @@ Resources:
             Type: String
             Description: API Lambda Function IAM Role ARN
 
-        Conditions:
-          CreateRegionalKey: !Not
-            - !Equals
-              - !Ref AWS::Region
-              - !Ref ParentStackRegion
-
         Resources:
-          CustomerDataKey:
-            Condition: CreateRegionalKey
-            Type: AWS::KMS::Key
-            Properties:
-              Description: Archodex backend customer data encryption key
-              EnableKeyRotation: true
-              KeyPolicy:
-                Version: "2012-10-17"
-                Statement:
-                  - Effect: Allow
-                    Principal:
-                      AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
-                    Action: kms:*
-                    Resource: "*"
-                  - Effect: Allow
-                    Principal:
-                      AWS: "*"
-                    Action: kms:*
-                    Resource: "*"
-                    Condition:
-                      ArnLike:
-                        aws:PrincipalArn: !Sub arn:${AWS::Partition}::iam::${AWS::AccountId}:role/*
-                  - Effect: Allow
-                    Principal:
-                      AWS: "*"
-                    Action:
-                      - kms:CreateGrant
-                      - kms:ListGrants
-                      - kms:RevokeGrant
-                    Resource: "*"
-                    Condition:
-                      Bool:
-                        kms:GrantIsForAWSResource: true
-
-          CustomerDataKeyAlias:
-            Condition: CreateRegionalKey
-            Type: AWS::KMS::Alias
-            Properties:
-              AliasName: alias/ArchodexBackendCustomerDataKey
-              TargetKeyId: !Ref CustomerDataKey
-
           AccountsTable:
             Type: AWS::DynamoDB::Table
             Properties:
@@ -650,10 +544,7 @@ Resources:
               PointInTimeRecoverySpecification:
                 PointInTimeRecoveryEnabled: true
               SSESpecification:
-                KMSMasterKeyId: !If
-                  - CreateRegionalKey
-                  - !Ref CustomerDataKeyAlias
-                  - alias/ArchodexBackendCustomerDataKey
+                KMSMasterKeyId: alias/ArchodexBackendCustomerDataKey
                 SSEEnabled: true
                 SSEType: KMS
               TableName: !Sub archodex-accounts-${AWS::Region}
