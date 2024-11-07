@@ -25,9 +25,11 @@ aws-smithy-runtime-api = "1.6.1"
 aws-smithy-types = "1.1.10"
 axum.workspace = true
 axum-macros = "0.4.1"
+base64 = "0.22.1"
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }
 hex = { version = "0.4.3", features = ["serde"] }
 migrator = { path = "migrator" }
+reqwest = { version = "0.12.9", default-features = false, features = ["http2", "rustls-tls"] }
 serde = { version = "1.0.202", features = ["derive"] }
 serde_json = "1.0.117"
 surrealdb.workspace = true

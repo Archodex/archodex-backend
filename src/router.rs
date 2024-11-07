@@ -1,12 +1,12 @@
 use axum::{http::header::CONTENT_TYPE, middleware, routing::*, Router};
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::{AllowMethods, AllowOrigin, CorsLayer},
+    cors::{AllowCredentials, AllowMethods, AllowOrigin, CorsLayer},
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing::Level;
 
-use crate::{auth::auth, db::db, principal_chain, query, report, signup};
+use crate::{auth::auth, db::db, oauth2, principal_chain, query, report, signup};
 
 pub fn router() -> Router {
     Router::new()
@@ -18,13 +18,15 @@ pub fn router() -> Router {
             ServiceBuilder::new()
                 .layer(
                     CorsLayer::new()
-                        .allow_methods(AllowMethods::any())
-                        .allow_origin(AllowOrigin::any())
-                        .allow_headers([CONTENT_TYPE]),
+                        .allow_methods(AllowMethods::mirror_request())
+                        .allow_origin(AllowOrigin::mirror_request())
+                        .allow_headers([CONTENT_TYPE])
+                        .allow_credentials(AllowCredentials::yes()),
                 )
                 .layer(middleware::from_fn(auth))
                 .layer(middleware::from_fn(db)),
         )
+        .route("/oauth2/idpresponse", get(oauth2::idp_response))
         .route("/health", get(|| async { "Ok" }))
         .layer(
             TraceLayer::new_for_http()

@@ -24,6 +24,11 @@
       "env": {
         "AWS_PROFILE": "ddbtest",
         "COLORTERM": "truecolor",
+        "COGNITO_TOKEN_ENDPOINT": "https://auth.chase.dev.servicearch.com/oauth2/token",
+        "COGNITO_CLIENT_ID": "3r0ibjo8ibf3q2r4u1aau8m8cj",
+        "COGNITO_REDIRECT_URI": "http://localhost:5731/oauth2/idpresponse",
+        "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS": "1",
+        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
       }
     },
     {

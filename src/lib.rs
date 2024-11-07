@@ -3,6 +3,7 @@ mod db;
 mod error;
 mod event;
 mod global_container;
+mod oauth2;
 mod principal_chain;
 mod query;
 mod report;
