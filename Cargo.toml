@@ -24,6 +24,7 @@ aws-sdk-dynamodb = { version = "1.30.0", features = ["behavior-version-latest"] 
 aws-smithy-runtime-api = "1.6.1"
 aws-smithy-types = "1.1.10"
 axum.workspace = true
+axum-extra = { version = "0.9.4", default-features = false, features = ["cookie"] }
 axum-macros = "0.4.1"
 base64 = "0.22.1"
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }

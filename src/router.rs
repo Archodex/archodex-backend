@@ -16,15 +16,20 @@ pub fn router() -> Router {
         .route("/principal_chain", get(principal_chain::get))
         .layer(
             ServiceBuilder::new()
-                .layer(
-                    CorsLayer::new()
-                        .allow_methods(AllowMethods::mirror_request())
-                        .allow_origin(AllowOrigin::mirror_request())
-                        .allow_headers([CONTENT_TYPE])
-                        .allow_credentials(AllowCredentials::yes()),
-                )
                 .layer(middleware::from_fn(auth))
                 .layer(middleware::from_fn(db)),
+        )
+        .route("/oauth2/token", post(oauth2::refresh_token))
+        .layer(
+            CorsLayer::new()
+                .allow_methods(AllowMethods::mirror_request())
+                .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
+                    origin == "http://localhost:5173"
+                        || origin.as_bytes().ends_with(b".archodex.com")
+                        || origin.as_bytes().ends_with(b".dev.servicearch.com")
+                }))
+                .allow_headers([CONTENT_TYPE])
+                .allow_credentials(AllowCredentials::yes()),
         )
         .route("/oauth2/idpresponse", get(oauth2::idp_response))
         .route("/health", get(|| async { "Ok" }))
