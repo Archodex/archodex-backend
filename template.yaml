@@ -36,6 +36,12 @@ Resources:
           RequireLowercase: false
           RequireSymbols: false
       Schema:
+        - AttributeDataType: Number
+          Mutable: true
+          Name: account_id
+          NumberAttributeConstraints:
+            MaxValue: 9999999999
+            MinValue: 1000000000
         - AttributeDataType: String
           Name: endpoint
       UsernameAttributes:
@@ -273,6 +279,13 @@ Resources:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSXrayWriteOnlyAccess
       Policies:
+        - PolicyName: GetCognitoUserAttributes
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: cognito-idp:AdminGetUser
+                Resource: !GetAtt CognitoUserPool.Arn
         - PolicyName: CreateCustomerTables
           PolicyDocument:
             Version: "2012-10-17"
@@ -519,6 +532,8 @@ Resources:
           ParameterValue: !GetAtt APIRole.Arn
         - ParameterKey: APIBootstrapMD5Sum
           ParameterValue: !Ref APIBootstrapMD5Sum
+        - ParameterKey: CognitoUserPoolId
+          ParameterValue: !Ref CognitoUserPool
         - ParameterKey: CognitoUserPoolAppClientId
           ParameterValue: !Ref CognitoUserPoolAppClient
         - ParameterKey: CognitoRefreshTokenValidityInDays
@@ -549,6 +564,9 @@ Resources:
           APIBootstrapMD5Sum:
             Type: String
             Description: MD5 checksum of the Lambda API function zip package
+          CognitoUserPoolId:
+            Type: String
+            Description: Cognito User Pool ID
           CognitoUserPoolAppClientId:
             Type: String
             Description: Cognito User Pool App Client ID
@@ -591,10 +609,13 @@ Resources:
               FunctionName: archodex-backend-api
               Environment:
                 Variables:
+                  ENDPOINT: !Sub https://api.${AWS::Region}.${Domain}
                   COGNITO_AUTH_ENDPOINT: !Sub https://auth.${Domain}
+                  COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
                   COGNITO_CLIENT_ID: !Ref CognitoUserPoolAppClientId
                   COGNITO_REDIRECT_URI: !Sub https://api.${AWS::Region}.${Domain}/oauth2/idpresponse
                   COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS: !Ref CognitoRefreshTokenValidityInDays
+                  COGNITO_ISSUER_ENDPOINT: !Sub https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}
                   APP_REDIRECT_URI: !Sub https://app.${Domain}/oauth2/idpresponse
               Handler: bootstrap
               MemorySize: 3008

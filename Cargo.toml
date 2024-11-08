@@ -20,6 +20,7 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0.89"
 aws-config = { version = "1.5.0", features = ["behavior-version-latest"] }
+aws-sdk-cognitoidentityprovider = { version = "1.57.0", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = { version = "1.30.0", features = ["behavior-version-latest"] }
 aws-smithy-runtime-api = "1.6.1"
 aws-smithy-types = "1.1.10"
@@ -29,6 +30,7 @@ axum-macros = "0.4.1"
 base64 = "0.22.1"
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }
 hex = { version = "0.4.3", features = ["serde"] }
+josekit = { version = "0.10.0", default-features = false, features = ["vendored"] }
 migrator = { path = "migrator" }
 reqwest = { version = "0.12.9", default-features = false, features = ["http2", "rustls-tls"] }
 serde = { version = "1.0.202", features = ["derive"] }

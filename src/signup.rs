@@ -40,8 +40,12 @@ pub(crate) async fn signup(
     Extension(db): Extension<Surreal<Db>>,
     Json(_): Json<SignupRequest>,
 ) -> Result<()> {
+    let Some(account_id) = principal.account_id() else {
+        not_found!("Account is not initialized yet");
+    };
+
     let client = ddb_client().await;
-    let table_name = dynamodb_resources_table_name_for_account(principal.account_id());
+    let table_name = dynamodb_resources_table_name_for_account(&account_id.to_string());
 
     info!("Creating DynamoDB table {table_name}...");
 
@@ -171,7 +175,7 @@ pub(crate) async fn signup(
 
     info!(
         "Migrating 'resources' database for account {}...",
-        principal.account_id()
+        account_id
     );
 
     while let Err(err) = migrator::migrate_account_resources_database(&db).await {

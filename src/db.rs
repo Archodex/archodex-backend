@@ -6,7 +6,7 @@ use surrealdb::{
 };
 use tokio::sync::OnceCell;
 
-use crate::{auth::Principal, Result};
+use crate::{auth::Principal, macros::*, Result};
 
 const DB: OnceCell<Surreal<Db>> = OnceCell::const_new();
 
@@ -21,6 +21,10 @@ pub(crate) async fn db(
     mut req: Request,
     next: Next,
 ) -> Result<Response> {
+    let Some(account_id) = principal.account_id() else {
+        not_found!("Account is not initialized yet");
+    };
+
     let db = DB
         .get_or_try_init(|| async {
             Surreal::new::<surrealdb::engine::local::DynamoDB>((
@@ -34,7 +38,7 @@ pub(crate) async fn db(
         .await?
         .clone();
 
-    db.use_ns(principal.account_id())
+    db.use_ns(account_id.to_string())
         .use_db("resources")
         .await?;
 

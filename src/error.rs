@@ -97,6 +97,36 @@ pub(super) mod macros {
     pub(crate) use bad_request;
 
     #[allow(unused_macros)]
+    macro_rules! unauthorized {
+        () => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::UNAUTHORIZED,
+                "Unauthorized",
+            ))
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use unauthorized;
+
+    #[allow(unused_macros)]
+    macro_rules! forbidden {
+        ($msg:literal $(,)?) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::FORBIDDEN,
+                format!($msg),
+            ))
+        };
+        ($fmt:expr, $($arg:tt)*) => {
+            bail!($crate::error::PublicError::new(
+                ::axum::http::StatusCode::FORBIDDEN,
+                format!($fmt, $($arg)*),
+            ))
+        };
+    }
+    #[allow(unused_imports)]
+    pub(crate) use forbidden;
+
+    #[allow(unused_macros)]
     macro_rules! not_found {
         ($msg:literal $(,)?) => {
             bail!($crate::error::PublicError::new(
