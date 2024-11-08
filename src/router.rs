@@ -20,6 +20,7 @@ pub fn router() -> Router {
                 .layer(middleware::from_fn(db)),
         )
         .route("/oauth2/token", post(oauth2::refresh_token))
+        .route("/oauth2/revoke", post(oauth2::revoke_token))
         .layer(
             CorsLayer::new()
                 .allow_methods(AllowMethods::mirror_request())

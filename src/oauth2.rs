@@ -10,7 +10,7 @@ use base64::Engine;
 use chrono::Utc;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::{macros::*, PublicError, Result};
 
@@ -46,10 +46,9 @@ pub(crate) async fn idp_response(
 
     // e.g. https://auth.archodex.com/oauth2/token
     let mut cognito_token_endpoint = Url::parse(
-        &std::env::var("COGNITO_TOKEN_ENDPOINT")
-            .context("Missing COGNITO_TOKEN_ENDPOINT env var")?,
+        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
     )
-    .context("Failed to parse env var COGNITO_TOKEN_ENDPOINT as a URL")?;
+    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
     cognito_token_endpoint.set_path("/oauth2/token");
 
     let client_id =
@@ -130,20 +129,15 @@ pub(crate) async fn idp_response(
         AppendHeaders([
             (
                 header::SET_COOKIE,
-                format!(
-                    "accessToken={access_token}; HttpOnly; Path=/; SameSite=Strict; Secure"
-                ),
+                format!("accessToken={access_token}; HttpOnly; Path=/; SameSite=Strict; Secure"),
             ),
             (
                 header::SET_COOKIE,
                 format!(
-                    "refreshToken={refresh_token}; HttpOnly; Path=/oauth2/token; SameSite=Strict; Secure"
+                    "refreshToken={refresh_token}; HttpOnly; Path=/oauth2; SameSite=Strict; Secure"
                 ),
             ),
-            (
-                header::LOCATION,
-                app_redirect_uri.to_string(),
-            )
+            (header::LOCATION, app_redirect_uri.to_string()),
         ]),
     ))
 }
@@ -169,10 +163,9 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
 
     // e.g. https://auth.archodex.com/oauth2/token
     let mut cognito_token_endpoint = Url::parse(
-        &std::env::var("COGNITO_TOKEN_ENDPOINT")
-            .context("Missing COGNITO_TOKEN_ENDPOINT env var")?,
+        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
     )
-    .context("Failed to parse env var COGNITO_TOKEN_ENDPOINT as a URL")?;
+    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
     cognito_token_endpoint.set_path("/oauth2/token");
 
     let client_id =
@@ -227,6 +220,77 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
             endpoint,
         }),
     ))
+}
+
+pub(crate) async fn revoke_token(cookies: CookieJar) -> impl IntoResponse {
+    if let Err(err) = try_revoke_token(cookies).await {
+        warn!("Failed to revoke token from Cognito service: {err:#?}");
+    }
+
+    (
+        StatusCode::OK,
+        AppendHeaders([
+            (
+                header::SET_COOKIE,
+                "refreshToken=; HttpOnly; Path=/; SameSite=Strict; Secure; Max-Age=0",
+            ),
+            (
+                header::SET_COOKIE,
+                "accessToken=; HttpOnly; Path=/; SameSite=Strict; Secure; Max-Age=0",
+            ),
+        ]),
+    )
+}
+
+async fn try_revoke_token(cookies: CookieJar) -> anyhow::Result<()> {
+    let refresh_token = cookies
+        .get("refreshToken")
+        .ok_or_else(|| {
+            anyhow!(PublicError::new(
+                StatusCode::BAD_REQUEST,
+                "Missing refreshToken cookie"
+            ))
+        })?
+        .value();
+
+    let client = reqwest::Client::new();
+
+    // e.g. https://auth.archodex.com/oauth2/token
+    let mut cognito_revoke_endpoint = Url::parse(
+        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
+    )
+    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
+    cognito_revoke_endpoint.set_path("/oauth2/revoke");
+
+    let client_id =
+        std::env::var("COGNITO_CLIENT_ID").context("Missing COGNITO_CLIENT_ID env var")?;
+
+    debug!("Making request to {cognito_revoke_endpoint} to revoke token...");
+
+    let response = client
+        .post(cognito_revoke_endpoint)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .form(&[
+            ("client_id", &client_id),
+            ("token", &refresh_token.to_string()),
+        ])
+        .send()
+        .await
+        .context("Failed to send request to Cognito revoke endpoint")?;
+
+    let status = response.status();
+
+    let body = response
+        .text()
+        .await
+        .context("Failed to parse response body")?;
+
+    ensure!(
+        status.is_success(),
+        "Received unsuccessful response: {status}:\n{body}",
+    );
+
+    Ok(())
 }
 
 fn endpoint_from_id_token(id_token: &str) -> anyhow::Result<Option<String>> {
