@@ -36,14 +36,11 @@ jobs:
           API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          aws s3 ls "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip" > /dev/null
-          if [ $? -eq 0 ]; then
-            echo "Lambda API function zip package already exists in ${{matrix.region}} deployment asset bucket"
-          else
+          aws s3 ls "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip" > /dev/null && \
+            echo "Lambda API function zip package already exists in ${{matrix.region}} deployment asset bucket" || \
             aws s3 cp --sse AES256 \
               target/lambda/lambda/bootstrap.zip \
               "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip"
-          fi          
 
   deploy:
     needs: upload
