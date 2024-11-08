@@ -2,8 +2,12 @@ Transform: AWS::Serverless-2016-10-31
 
 Parameters:
   CustomerDataRegions:
-    Type: CommaDelimitedList
+    Type: AWS::SSM::Parameter::Value<List<String>>
     Description: Regions where customer accounts may be provisioned
+    Default: /customer_data_regions
+  APIBootstrapMD5Sum:
+    Type: String
+    Description: MD5 checksum of the Lambda API function zip package
 
 Mappings:
   Constants:
@@ -399,7 +403,7 @@ Resources:
                 Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:archodex-backend-api
               - Effect: Allow
                 Action: s3:GetObject
-                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-*/backend/api/bootstrap.zip
+                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-*/backend/api/bootstrap-*.zip
               - Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt APIRole.Arn
@@ -513,6 +517,15 @@ Resources:
           ParameterValue: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
         - ParameterKey: APIRoleArn
           ParameterValue: !GetAtt APIRole.Arn
+        - ParameterKey: APIBootstrapMD5Sum
+          ParameterValue: !Ref APIBootstrapMD5Sum
+        - ParameterKey: CognitoUserPoolAppClientId
+          ParameterValue: !Ref CognitoUserPoolAppClient
+        - ParameterKey: CognitoRefreshTokenValidityInDays
+          ParameterValue: !FindInMap
+            - Constants
+            - Auth
+            - RefreshTokenValidityInDays
       PermissionModel: SELF_MANAGED
       StackInstancesGroup:
         - DeploymentTargets:
@@ -533,6 +546,15 @@ Resources:
           APIRoleArn:
             Type: String
             Description: API Lambda Function IAM Role ARN
+          APIBootstrapMD5Sum:
+            Type: String
+            Description: MD5 checksum of the Lambda API function zip package
+          CognitoUserPoolAppClientId:
+            Type: String
+            Description: Cognito User Pool App Client ID
+          CognitoRefreshTokenValidityInDays:
+            Type: Number
+            Description: Number of days a refresh token is valid for
 
         Resources:
           AccountsTable:
@@ -565,8 +587,15 @@ Resources:
                 - arm64
               Code:
                 S3Bucket: !Sub cloudformation-deployment-assets-${AWS::AccountId}-${AWS::Region}
-                S3Key: backend/api/bootstrap.zip
+                S3Key: !Sub backend/api/bootstrap-${APIBootstrapMD5Sum}.zip
               FunctionName: archodex-backend-api
+              Environment:
+                Variables:
+                  COGNITO_TOKEN_ENDPOINT: !Sub https://auth.${Domain}/oauth2/token
+                  COGNITO_CLIENT_ID: !Ref CognitoUserPoolAppClientId
+                  COGNITO_REDIRECT_URI: !Sub https://api.${AWS::Region}.${Domain}/oauth2/idpresponse
+                  COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS: !Ref CognitoRefreshTokenValidityInDays
+                  APP_REDIRECT_URI: !Sub https://app.${Domain}/oauth2/idpresponse
               Handler: bootstrap
               MemorySize: 3008
               Role: !Ref APIRoleArn

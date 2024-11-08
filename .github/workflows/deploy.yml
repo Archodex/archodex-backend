@@ -33,11 +33,17 @@ jobs:
     steps:
       - name: Upload Lambda API function zip package to regional backend deployment asset buckets
         run: |-
-          aws s3 sync --sse AES256 \
-          target/lambda/lambda \
-          "s3://cloudformation-deployment-assets-$(aws sts get-caller-identity --query Account --output text)-${{matrix.region}}/backend/api/bootstrap.zip" \
-          --exclude='*' \
-          --include='*/bootstrap.zip'
+          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+          aws s3 ls "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip" > /dev/null
+          if [ $? -eq 0 ]; then
+            echo "Lambda API function zip package already exists in ${{matrix.region}} deployment asset bucket"
+          else
+            aws s3 cp --sse AES256 \
+              target/lambda/lambda/bootstrap.zip \
+              "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip"
+          fi          
 
   deploy:
     needs: upload
@@ -48,9 +54,11 @@ jobs:
     steps:
       - name: Deploy CloudFormation stack
         run: |-
+          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+
           aws cloudformation create-change-set \
             --stack-name archodex-backend \
             --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S%z)" \
             --template-body file://template.yaml \
             --capabilities CAPABILITY_NAMED_IAM \
-            --parameters ParameterKey=CustomerDataRegions,ParameterValue=\"us-west-2,us-east-1\"
+            --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}"
