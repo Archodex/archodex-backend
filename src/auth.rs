@@ -11,7 +11,7 @@ use josekit::{
 use tokio::sync::OnceCell;
 use tracing::{debug, info, warn};
 
-use crate::{macros::*, Result};
+use crate::{cognito, macros::*, Result};
 
 #[derive(Clone)]
 pub(crate) struct Principal {
@@ -135,16 +135,7 @@ pub(crate) async fn auth(mut req: Request, next: Next) -> Result<Response> {
 
     debug!("Authenticated as {sub}");
 
-    let config = if let Ok(cognito_aws_profile) = std::env::var("COGNITO_AWS_PROFILE") {
-        aws_config::from_env()
-            .profile_name(cognito_aws_profile)
-            .load()
-            .await
-    } else {
-        aws_config::load_from_env().await
-    };
-
-    let client = aws_sdk_cognitoidentityprovider::Client::new(&config);
+    let client = cognito::client().await;
 
     let user = client
         .admin_get_user()

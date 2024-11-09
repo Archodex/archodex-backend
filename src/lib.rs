@@ -1,4 +1,6 @@
+mod accounts;
 mod auth;
+mod cognito;
 mod db;
 mod error;
 mod event;
