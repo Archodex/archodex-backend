@@ -35,6 +35,10 @@ Resources:
           RequireUppercase: false
           RequireLowercase: false
           RequireSymbols: false
+        SignInPolicy:
+          AllowedFirstAuthFactors:
+            - PASSWORD
+            - WEB_AUTHN
       Schema:
         - AttributeDataType: Number
           Mutable: true
@@ -52,8 +56,10 @@ Resources:
         AttributesRequireVerificationBeforeUpdate:
           - email
       UserPoolName: archodex
+      UserPoolTier: ESSENTIALS
       VerificationMessageTemplate:
         DefaultEmailOption: CONFIRM_WITH_LINK
+      WebAuthnUserVerification: required
 
   CognitoUserPoolAppClient:
     Type: AWS::Cognito::UserPoolClient
@@ -71,7 +77,7 @@ Resources:
       DefaultRedirectURI: !Sub https://api.${AWS::Region}.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
-        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_AUTH
       PreventUserExistenceErrors: ENABLED
       ReadAttributes:
         - custom:endpoint
@@ -84,6 +90,17 @@ Resources:
       UserPoolId: !Ref CognitoUserPool
       WriteAttributes:
         - email
+
+  CognitoUserPoolManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    Properties:
+      ClientId: !Ref CognitoUserPoolAppClient
+      Settings:
+        categories:
+          global:
+            colorSchemeMode: DYNAMIC
+            spacingDensity: CONDENSED
+      UserPoolId: !Ref CognitoUserPool
 
   USEast1StackSetExecutionRole:
     Type: AWS::IAM::Role
@@ -253,6 +270,7 @@ Resources:
       CustomDomainConfig:
         CertificateArn: "{{resolve:ssm:/archodex-backend/cognito_domain_certificate}}"
       Domain: auth.{{resolve:ssm:/account_subdomain/domain}}
+      ManagedLoginVersion: 2
       UserPoolId: !Ref CognitoUserPool
 
   CognitoUserPoolDomainDNSRecord:
