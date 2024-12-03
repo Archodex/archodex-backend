@@ -553,7 +553,7 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:UpdateItem
                 Resource:
-                  - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-accounts-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/${AccountsGlobalTable}
                   - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-service-data-*
               - Effect: Allow
                 Action:
@@ -619,24 +619,6 @@ Resources:
                 Condition:
                   StringEquals:
                     kms:RequestAlias: alias/ArchodexBackendCustomerDataKey
-        - PolicyName: ManageAccountsTable
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:CreateTable
-                  - dynamodb:DeleteTable
-                  - dynamodb:DescribeContinuousBackups
-                  - dynamodb:DescribeTable
-                  - dynamodb:DescribeTimeToLive
-                  - dynamodb:ListTagsOfResource
-                  - dynamodb:TagResource
-                  - dynamodb:UntagResource
-                  - dynamodb:UpdateContinuousBackups
-                  - dynamodb:UpdateTable
-                  - dynamodb:UpdateTimeToLive
-                Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-accounts-*
         - PolicyName: ManageAPIFunction
           PolicyDocument:
             Version: "2012-10-17"
@@ -817,29 +799,6 @@ Resources:
             Description: Number of days a refresh token is valid for
 
         Resources:
-          AccountsTable:
-            Type: AWS::DynamoDB::Table
-            Properties:
-              AttributeDefinitions:
-                - AttributeName: pk
-                  AttributeType: B
-                - AttributeName: sk
-                  AttributeType: B
-              BillingMode: PAY_PER_REQUEST
-              DeletionProtectionEnabled: true
-              KeySchema:
-                - AttributeName: pk
-                  KeyType: HASH
-                - AttributeName: sk
-                  KeyType: RANGE
-              PointInTimeRecoverySpecification:
-                PointInTimeRecoveryEnabled: true
-              SSESpecification:
-                KMSMasterKeyId: alias/ArchodexBackendCustomerDataKey
-                SSEEnabled: true
-                SSEType: KMS
-              TableName: !Sub archodex-accounts-${AWS::Region}
-
           API:
             Type: AWS::Lambda::Function
             Properties:
