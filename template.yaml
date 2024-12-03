@@ -1,4 +1,7 @@
-Transform: AWS::Serverless-2016-10-31
+AWSTemplateFormatVersion: "2010-09-09"
+Transform:
+  - AWS::LanguageExtensions
+  - AWS::Serverless-2016-10-31
 
 Parameters:
   CustomerDataRegions:
@@ -282,6 +285,227 @@ Resources:
       TTL: 300
       ResourceRecords:
         - !GetAtt CognitoUserPoolDomain.CloudFrontDistribution
+
+  AccountsGlobalTable:
+    Type: AWS::DynamoDB::GlobalTable
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: B
+        - AttributeName: sk
+          AttributeType: B
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      Replicas:
+        - DeletionProtectionEnabled: true
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+          Region: !Ref AWS::Region
+          SSESpecification:
+            KMSMasterKeyId: alias/ArchodexBackendCustomerDataKey
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TableName: archodex-accounts
+
+  AccountsReplicaTableCustomResourceHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      Architectures:
+        - arm64
+      Description: Cloudformation Custom Resource handler for managing regional replicas of the accounts global table
+      Environment:
+        Variables:
+          ACCOUNTS_GLOBAL_TABLE_NAME: !Ref AccountsGlobalTable
+      FunctionName: !Sub ${AWS::StackName}-accounts-replica-table-custom-resource-handler
+      Handler: index.handler
+      InlineCode: |-
+        const { DynamoDBClient, UpdateTableCommand } = require('@aws-sdk/client-dynamodb');
+        const https = require('https');
+
+        const client = new DynamoDBClient();
+
+        const isConfigurationEqual = (conf1, conf2) => Object.keys(conf1)
+          .concat(Object.keys(conf2))
+          .every(key => conf1[key] === conf2[key]);
+
+        module.exports.handler = async (event) => {
+          console.log(JSON.stringify(event, null, 2));
+
+          const replicaUpdates = [];
+
+          if (typeof event.ResourceProperties.Replicas === 'object') {
+            delete event.ResourceProperties.Replicas[process.env.AWS_REGION];
+          } else {
+            return sendResponse(event, 'FAILED', 'Replicas property must be a map of region names to replica configurations');
+          }
+
+          if (event.RequestType === 'Create') {
+            for (const [region, configuration] of Object.entries(event.ResourceProperties.Replicas)) {
+              replicaUpdates.push({
+                Create: {
+                  RegionName: region,
+                  ...configuration,
+                }
+              });
+            }
+          } else if (event.RequestType === 'Update') {
+            if (typeof event.OldResourceProperties.Replicas === 'object') {
+              delete event.OldResourceProperties.Replicas[process.env.AWS_REGION];
+            }
+
+            for (const [region, configuration] of Object.entries(event.ResourceProperties.Replicas)) {
+              if (region in event.OldResourceProperties.Replicas) {
+                if (!isConfigurationEqual(configuration, event.OldResourceProperties.Replicas[region])) {
+                  replicaUpdates.push({
+                    Update: {
+                      RegionName: region,
+                      ...configuration,
+                    }
+                  });
+                }
+              } else {
+                replicaUpdates.push({
+                  Create: {
+                    RegionName: region,
+                    ...configuration,
+                  }
+                });
+              }
+            }
+
+            for (const region in event.OldResourceProperties.Replicas) {
+              if (!(region in event.ResourceProperties.Replicas)) {
+                replicaUpdates.push({
+                  Delete: {
+                    RegionName: region,
+                  }
+                });
+              }
+            }
+          } else if (event.RequestType === 'Delete') {
+            for (const region in event.ResourceProperties.Replicas) {
+              replicaUpdates.push({
+                Delete: {
+                  RegionName: region,
+                }
+              });
+            }
+          }
+
+          console.log('Replica Updates: ' + JSON.stringify(replicaUpdates, null, 2));
+
+          if (replicaUpdates.length === 0) {
+            return sendResponse(event, 'SUCCESS');
+          }
+
+          try {
+            const params = {
+              TableName: process.env.ACCOUNTS_GLOBAL_TABLE_NAME,
+              ReplicaUpdates: replicaUpdates,
+            };
+
+            const command = new UpdateTableCommand(params);
+            await client.send(command);
+
+            console.log('Table updated successfully');
+
+            return sendResponse(event, 'SUCCESS');
+          } catch (error) {
+            console.error('Table update failed');
+            console.error(error);
+            return sendResponse(event, 'FAILED', error.message);
+          }
+        };
+
+        const sendResponse = (event, status, reason) => {
+          const responseBody = JSON.stringify({
+            Status: status,
+            Reason: reason || `See CloudWatch Log Stream: ${process.env.AWS_LAMBDA_LOG_STREAM_NAME}`,
+            PhysicalResourceId: event.PhysicalResourceId || process.env.ACCOUNTS_GLOBAL_TABLE_NAME,
+            StackId: event.StackId,
+            RequestId: event.RequestId,
+            LogicalResourceId: event.LogicalResourceId,
+          });
+
+          const options = {
+            method: 'PUT',
+            headers: {
+              'Content-Type': '',
+              'Content-Length': responseBody.length,
+            },
+          };
+
+          return new Promise((resolve, reject) => {
+            const request = https.request(event.ResponseURL, options, response => {
+              console.log(`CloudFormation Response status code: ${response.statusCode}`);
+
+              response.on('data', () => {});
+              response.on('end', resolve);
+            });
+
+            request.on('error', reject);
+            request.write(responseBody);
+            request.end();
+          });
+        };
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:UpdateTable
+              Resource: !GetAtt AccountsGlobalTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:BatchWriteItem
+                - dynamodb:CreateTable
+                - dynamodb:CreateTableReplica
+                - dynamodb:DeleteItem
+                - dynamodb:DeleteTable
+                - dynamodb:DeleteTableReplica
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:UpdateItem
+                - dynamodb:UpdateTimeToLive
+              Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/${AccountsGlobalTable}
+            - Effect: Allow
+              Action:
+                - kms:CreateGrant
+                - kms:Decrypt
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:RevokeGrant
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  aws:CalledViaLast: !Sub dynamodb.${AWS::URLSuffix}
+      Runtime: nodejs22.x
+      Timeout: 29
+      Tracing: Active
+
+  AccountsReplicaTableCustomResourceHandlerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AccountsReplicaTableCustomResourceHandler}
+
+  AccountsReplicaTables:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt AccountsReplicaTableCustomResourceHandler.Arn
+      ServiceTimeout: 30
+      Replicas:
+        Fn::ForEach::AccountsTableReplicaRegion:
+          - Region
+          - !Ref CustomerDataRegions
+          - ${Region}:
+              KMSMasterKeyId: alias/ArchodexBackendCustomerDataKey
 
   APIRole:
     Type: AWS::IAM::Role
