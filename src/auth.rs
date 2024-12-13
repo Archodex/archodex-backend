@@ -1,28 +1,22 @@
 use std::{collections::HashMap, time::SystemTime};
 
 use anyhow::{anyhow, Context};
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{Path, Request},
+    middleware::Next,
+    response::Response,
+};
 use axum_extra::extract::CookieJar;
 use josekit::{
     jwk::JwkSet,
     jws::alg::rsassa::{RsassaJwsAlgorithm, RsassaJwsVerifier},
     jwt, JoseError,
 };
+use surrealdb::Uuid;
 use tokio::sync::OnceCell;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
-use crate::{cognito, macros::*, Result};
-
-#[derive(Clone)]
-pub(crate) struct Principal {
-    account_id: Option<u64>,
-}
-
-impl Principal {
-    pub(crate) fn account_id(&self) -> Option<u64> {
-        self.account_id.clone()
-    }
-}
+use crate::{env::Env, macros::*, user::User, Result};
 
 static JWK_SET: OnceCell<(JwkSet, HashMap<String, RsassaJwsVerifier>)> = OnceCell::const_new();
 
@@ -79,7 +73,27 @@ pub(crate) async fn jwks(
         .await
 }
 
-pub(crate) async fn auth(mut req: Request, next: Next) -> Result<Response> {
+#[derive(Clone)]
+pub(crate) struct Auth {
+    principal: User,
+    account_id: Option<String>,
+}
+
+impl Auth {
+    pub(crate) fn principal(&self) -> &User {
+        &self.principal
+    }
+
+    pub(crate) fn account_id(&self) -> Option<&String> {
+        self.account_id.as_ref()
+    }
+}
+
+pub(crate) async fn auth(
+    Path(params): Path<HashMap<String, String>>,
+    mut req: Request,
+    next: Next,
+) -> Result<Response> {
     let cookies = CookieJar::from_headers(req.headers());
 
     let Some(access_token) = cookies.get("accessToken") else {
@@ -87,19 +101,15 @@ pub(crate) async fn auth(mut req: Request, next: Next) -> Result<Response> {
         unauthorized!();
     };
 
-    let jwks_issuer_endpoint =
-        std::env::var("COGNITO_ISSUER_ENDPOINT").expect("Missing COGNITO_ISSUER_ENDPOINT env var");
-    let cognito_user_pool_id =
-        std::env::var("COGNITO_USER_POOL_ID").expect("Missing COGNITO_USER_POOL_ID env var");
-    let cognito_client_id =
-        std::env::var("COGNITO_CLIENT_ID").expect("Missing COGNITO_CLIENT_ID env var");
-    let endpoint = std::env::var("ENDPOINT").expect("Missing ENDPOINT env var");
+    let cognito_issuer_endpoint = Env::cognito_issuer_endpoint();
+    let cognito_user_pool_id = Env::cognito_user_pool_id();
+    let cognito_client_id = Env::cognito_client_id();
 
-    let jwks_issuer = format!("{jwks_issuer_endpoint}/{cognito_user_pool_id}");
+    let jwks_issuer = format!("{cognito_issuer_endpoint}/{cognito_user_pool_id}");
 
     let (jwk_set, verifier_map) = jwks(&jwks_issuer).await;
 
-    let sub = match jwt::decode_with_verifier_in_jwk_set(access_token.value(), jwk_set, |jwk| {
+    let user_id = match jwt::decode_with_verifier_in_jwk_set(access_token.value(), jwk_set, |jwk| {
         Ok(verifier_map
             .get(jwk.key_id().ok_or(JoseError::InvalidJwkFormat(anyhow!(
                 "Cognito jwk missing 'kid' field"
@@ -133,51 +143,26 @@ pub(crate) async fn auth(mut req: Request, next: Next) -> Result<Response> {
         }
     }?;
 
-    debug!("Authenticated as {sub}");
+    let user_id = Uuid::parse_str(&user_id)
+        .with_context(|| format!("Failed to parse user ID {user_id:?} as UUID"))?;
 
-    let client = cognito::client().await;
+    debug!("Authenticated as user ID {user_id}");
 
-    let user = client
-        .admin_get_user()
-        .user_pool_id(cognito_user_pool_id)
-        .username(sub.clone())
-        .send()
-        .await
-        .with_context(|| format!("Failed to get user info from Cognito for sub {sub:?}"))?;
-
-    let user_endpoint = user
-        .user_attributes()
-        .iter()
-        .find(|&attr| attr.name() == "custom:endpoint")
-        .map(|attr| attr.value())
-        .flatten();
-
-    if let Some(user_endpoint) = user_endpoint {
-        if user_endpoint != endpoint {
-            warn!("User {sub:?} attempted to access endpoint {endpoint:?} but is only authorized for {user_endpoint:?}");
-            forbidden!("User is not authorized to access this endpoint");
-        }
-    }
-
-    let account_id = match user
-        .user_attributes()
-        .iter()
-        .find(|&attr| attr.name() == "custom:account_id")
-        .map(|attr| attr.value())
-        .flatten()
-        .map(|account_id| {
-            account_id
-                .parse::<u64>()
-                .with_context(|| format!("Failed to parse account_id {account_id:?}"))
-        }) {
-        Some(Ok(account_id)) => Some(account_id),
-        Some(Err(err)) => bail!(err),
-        None => None,
+    let user_id = if Env::is_local_dev() {
+        let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
+            .expect("Failed to parse local development user ID");
+        info!("Local development mode: Overriding user ID to {user_id}");
+        user_id
+    } else {
+        user_id
     };
 
-    info!("Authenticated as {sub:?} with account_id {account_id:?}");
+    let account_id = params.get("account_id").cloned();
 
-    req.extensions_mut().insert(Principal { account_id });
+    req.extensions_mut().insert(Auth {
+        principal: User::new(user_id),
+        account_id,
+    });
 
     Ok(next.run(req).await)
 }

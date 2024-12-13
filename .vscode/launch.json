@@ -7,7 +7,7 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'server'",
+      "name": "Debug executable 'server' in local dev mode",
       "cargo": {
         "args": [
           "build",
@@ -22,8 +22,49 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
-        "AWS_PROFILE": "ddbtest",
+        "ARCHODEX_DEV_MODE": "local",
+        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
+        //"RUST_LOG": "surreal=trace,info",
         "COLORTERM": "truecolor",
+        "AWS_PARTITION": "aws",
+        "AWS_REGION": "us-west-2",
+        "AWS_ACCOUNT_ID": "${config:archodex.AWS_ACCOUNT_ID}",
+        "CUSTOMER_DATA_OU_ID": "${config:archodex.CUSTOMER_DATA_OU_ID}",
+        "ENDPOINT": "http://localhost:5731",
+        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_ENV_NAME}.dev.servicearch.com",
+        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
+        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
+        "COGNITO_REDIRECT_URI": "http://localhost:5731/oauth2/idpresponse",
+        "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS": "1",
+        "COGNITO_ISSUER_ENDPOINT": "https://cognito-idp.us-west-2.amazonaws.com",
+        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
+      },
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'server' in remote dev mode",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=server",
+          "--package=server"
+        ],
+        "filter": {
+          "name": "server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
+        //"RUST_LOG": "surreal=trace,info",
+        "COLORTERM": "truecolor",
+        "AWS_PARTITION": "aws",
+        "AWS_REGION": "us-west-2",
+        "AWS_ACCOUNT_ID": "891376912002",
+        "CUSTOMER_DATA_OU_ID": "ou-ijio-06qqr2r8",
         "COGNITO_AWS_PROFILE": "archodex-dev-AdministratorAccess",
         "ENDPOINT": "https://api.us-west-2.chase.dev.servicearch.com",
         "COGNITO_AUTH_ENDPOINT": "https://auth.chase.dev.servicearch.com",

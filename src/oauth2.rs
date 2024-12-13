@@ -8,11 +8,10 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use base64::Engine;
 use chrono::Utc;
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use crate::{macros::*, PublicError, Result};
+use crate::{env::Env, macros::*, PublicError, Result};
 
 #[derive(Deserialize)]
 pub(crate) struct IdpResponseQueryParams {
@@ -45,26 +44,12 @@ pub(crate) async fn idp_response(
     let client = reqwest::Client::new();
 
     // e.g. https://auth.archodex.com/oauth2/token
-    let mut cognito_token_endpoint = Url::parse(
-        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
-    )
-    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
+    let mut cognito_token_endpoint = Env::cognito_auth_endpoint().clone();
     cognito_token_endpoint.set_path("/oauth2/token");
 
-    let client_id =
-        std::env::var("COGNITO_CLIENT_ID").context("Missing COGNITO_CLIENT_ID env var")?;
-    let redirect_uri =
-        std::env::var("COGNITO_REDIRECT_URI").context("Missing COGNITO_REDIRECT_URI env var")?;
-    let refresh_token_validity_in_days = std::env::var("COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS")
-        .context("Missing COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS env var")?;
-    let refresh_token_validity_in_days = refresh_token_validity_in_days
-        .parse::<u16>()
-        .with_context(|| format!("Failed to parse COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS as a u16 (value: {refresh_token_validity_in_days:?}"))?;
-    let app_redirect_uri =
-        std::env::var("APP_REDIRECT_URI").context("Missing APP_REDIRECT_URI env var")?;
-    let mut app_redirect_uri = app_redirect_uri.parse::<Url>().with_context(|| {
-        format!("Failed to parse APP_REDIRECT_URI as a URL ({app_redirect_uri:?})")
-    })?;
+    let client_id = Env::cognito_client_id();
+    let redirect_uri = Env::cognito_redirect_uri();
+    let refresh_token_validity_in_days = Env::cognito_refresh_token_validity_in_days();
 
     debug!("Making request to {cognito_token_endpoint} for tokens...");
 
@@ -109,6 +94,7 @@ pub(crate) async fn idp_response(
 
     info!("Decoded ID token with endpoint {endpoint:?}, access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}");
 
+    let mut app_redirect_uri = Env::app_redirect_uri().clone();
     app_redirect_uri
         .query_pairs_mut()
         .append_pair("access_token_expiration", &access_token_exp.to_string())
@@ -162,14 +148,10 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
     let client = reqwest::Client::new();
 
     // e.g. https://auth.archodex.com/oauth2/token
-    let mut cognito_token_endpoint = Url::parse(
-        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
-    )
-    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
+    let mut cognito_token_endpoint = Env::cognito_auth_endpoint().clone();
     cognito_token_endpoint.set_path("/oauth2/token");
 
-    let client_id =
-        std::env::var("COGNITO_CLIENT_ID").context("Missing COGNITO_CLIENT_ID env var")?;
+    let client_id = Env::cognito_client_id();
 
     debug!("Making request to {cognito_token_endpoint} for refreshed tokens...");
 
@@ -256,24 +238,17 @@ async fn try_revoke_token(cookies: CookieJar) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
 
     // e.g. https://auth.archodex.com/oauth2/token
-    let mut cognito_revoke_endpoint = Url::parse(
-        &std::env::var("COGNITO_AUTH_ENDPOINT").context("Missing COGNITO_AUTH_ENDPOINT env var")?,
-    )
-    .context("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL")?;
+    let mut cognito_revoke_endpoint = Env::cognito_auth_endpoint().clone();
     cognito_revoke_endpoint.set_path("/oauth2/revoke");
 
-    let client_id =
-        std::env::var("COGNITO_CLIENT_ID").context("Missing COGNITO_CLIENT_ID env var")?;
+    let client_id = Env::cognito_client_id();
 
     debug!("Making request to {cognito_revoke_endpoint} to revoke token...");
 
     let response = client
         .post(cognito_revoke_endpoint)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .form(&[
-            ("client_id", &client_id),
-            ("token", &refresh_token.to_string()),
-        ])
+        .form(&[("client_id", client_id), ("token", refresh_token)])
         .send()
         .await
         .context("Failed to send request to Cognito revoke endpoint")?;

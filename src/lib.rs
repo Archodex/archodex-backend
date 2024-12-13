@@ -1,7 +1,8 @@
+mod account;
 mod accounts;
 mod auth;
-mod cognito;
 mod db;
+mod env;
 mod error;
 mod event;
 mod global_container;
@@ -9,8 +10,11 @@ mod oauth2;
 mod principal_chain;
 mod query;
 mod report;
+mod report_key;
+mod report_keys;
 mod resource;
-mod signup;
+mod surrealdb_deserializers;
+mod user;
 mod value;
 
 pub mod router;

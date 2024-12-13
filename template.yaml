@@ -4,6 +4,14 @@ Transform:
   - AWS::Serverless-2016-10-31
 
 Parameters:
+  EnvironmentOrganizationPath:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Organizational path for the environment
+    Default: /environment_organization_path
+  CustomerDataOUId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Organizational Unit ID for customer data accounts
+    Default: /customer_data_ou_id
   CustomerDataRegions:
     Type: AWS::SSM::Parameter::Value<List<String>>
     Description: Regions where customer accounts may be provisioned
@@ -564,6 +572,14 @@ Resources:
                 Condition:
                   StringEquals:
                     aws:CalledViaLast: !Sub dynamodb.${AWS::URLSuffix}
+        - PolicyName: ListCustomerDataAccounts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: organizations:ListAccountsForParent
+                Resource: !Sub arn:${AWS::Partition}:organizations::*:ou/*/${CustomerDataOUId}
+      RoleName: ArchodexBackendAPIRole
 
   RegionalBackendsStackSetExecutionRole:
     Type: AWS::IAM::Role
@@ -765,6 +781,8 @@ Resources:
             - Constants
             - Auth
             - RefreshTokenValidityInDays
+        - ParameterKey: CustomerDataOUId
+          ParameterValue: !Ref CustomerDataOUId
       PermissionModel: SELF_MANAGED
       StackInstancesGroup:
         - DeploymentTargets:
@@ -797,6 +815,9 @@ Resources:
           CognitoRefreshTokenValidityInDays:
             Type: Number
             Description: Number of days a refresh token is valid for
+          CustomerDataOUId:
+            Type: String
+            Description: Organizational Unit ID for customer data accounts
 
         Resources:
           API:
@@ -810,6 +831,8 @@ Resources:
               FunctionName: archodex-backend-api
               Environment:
                 Variables:
+                  AWS_PARTITION: !Ref AWS::Partition
+                  AWS_ACCOUNT_ID: !Ref AWS::AccountId
                   ENDPOINT: !Sub https://api.${AWS::Region}.${Domain}
                   COGNITO_AUTH_ENDPOINT: !Sub https://auth.${Domain}
                   COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
@@ -818,6 +841,7 @@ Resources:
                   COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS: !Ref CognitoRefreshTokenValidityInDays
                   COGNITO_ISSUER_ENDPOINT: !Sub https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}
                   APP_REDIRECT_URI: !Sub https://app.${Domain}/oauth2/idpresponse
+                  CUSTOMER_DATA_OU_ID: !Ref CustomerDataOUId
               Handler: bootstrap
               MemorySize: 3008
               Role: !Ref APIRoleArn

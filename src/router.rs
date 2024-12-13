@@ -6,20 +6,29 @@ use tower_http::{
 };
 use tracing::Level;
 
-use crate::{accounts, auth::auth, db::db, oauth2, principal_chain, query, report, signup};
+use crate::{accounts, auth::auth, db::db, oauth2, principal_chain, query, report, report_keys};
 
 pub fn router() -> Router {
     Router::new()
-        .route("/accounts", get(accounts::list_accounts))
         .route("/query/:type", get(query::query))
         .route("/principal_chain", get(principal_chain::get))
         .route("/report", post(report::report))
-        .layer(
-            ServiceBuilder::new()
-                .layer(middleware::from_fn(auth))
-                .layer(middleware::from_fn(db)),
+        .route(
+            "/account/:account_id/report_keys",
+            get(report_keys::list_report_keys),
         )
-        .route("/signup", post(signup::signup))
+        .route(
+            "/account/:account_id/report_keys",
+            post(report_keys::create_report_key),
+        )
+        .route(
+            "/account/:account_id/report_key/:report_key_id",
+            delete(report_keys::revoke_report_key),
+        )
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(db)))
+        .route("/accounts", get(accounts::list_accounts))
+        .route("/accounts", post(accounts::create_account))
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(auth)))
         .route("/oauth2/token", post(oauth2::refresh_token))
         .route("/oauth2/revoke", post(oauth2::revoke_token))
         .layer(
