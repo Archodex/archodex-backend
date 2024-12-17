@@ -15,7 +15,7 @@ const DB: OnceCell<Surreal<Db>> = OnceCell::const_new();
 const DYNAMODB_TABLE_PREFIX: &'static str = "archodex-service-data-";
 
 pub(crate) fn dynamodb_resources_table_name_for_account(account_id: &str) -> String {
-    format!("{DYNAMODB_TABLE_PREFIX}{account_id}-resources")
+    format!("{DYNAMODB_TABLE_PREFIX}a{account_id}-resources")
 }
 
 pub(crate) async fn db_for_customer_data_account(
@@ -70,7 +70,7 @@ pub(crate) async fn db_for_customer_data_account(
         }
     };
 
-    db.use_ns(archodex_account_id.to_string())
+    db.use_ns(format!("a{archodex_account_id}"))
         .use_db("resources")
         .await?;
 
@@ -105,7 +105,9 @@ pub(crate) async fn db<A: AccountAuth>(
         .await?
         .clone();
 
-    db.use_ns(account_id).use_db("resources").await?;
+    db.use_ns(format!("a{account_id}"))
+        .use_db("resources")
+        .await?;
 
     auth.validate(&db).await?;
 
