@@ -104,7 +104,7 @@ impl<'de> Deserialize<'de> for Event {
 
 impl Event {
     pub(crate) fn get_all() -> Vec<surrealdb::sql::Statement> {
-        "$events = SELECT * OMIT id FROM event PARALLEL;"
+        "$events = SELECT * OMIT id FROM event /*PARALLEL*/;"
             .into_query()
             .expect("Failed to create query for all event relationships")
     }
@@ -112,7 +112,7 @@ impl Event {
     pub(crate) fn add_events_going_to_resources() -> Vec<surrealdb::sql::Statement> {
         "$events = array::concat(
             $events,
-            array::flatten(SELECT VALUE <-event.* FROM $resources PARALLEL)
+            array::flatten(SELECT VALUE <-event.* FROM $resources /*PARALLEL*/)
         ).distinct();"
             .into_query()
             .expect("Failed to create query for all event relationships")

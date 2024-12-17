@@ -77,7 +77,7 @@ DEFINE FUNCTION IF NOT EXISTS fn::fetch_global_containers($resources: set<record
 
     // Select the container of each globally unique resource, but ignore
     // containers that are the root resource (resource:[])
-    $root_containers = (SELECT <-contains<-resource AS id, id AS contains FROM $resource_roots PARALLEL)
+    $root_containers = (SELECT <-contains<-resource AS id, id AS contains FROM $resource_roots /*PARALLEL*/)
         .map(|$record| { id: $record.id[0], contains: $record.contains })
         .filter(|$root_container| record::id($root_container.id) != []);
 

@@ -277,7 +277,7 @@ pub(crate) struct Resource {
 
 impl Resource {
     pub(crate) fn get_all() -> Vec<surrealdb::sql::Statement> {
-        "$resources = SELECT * FROM resource WHERE id != resource:[] PARALLEL;"
+        "$resources = SELECT * FROM resource WHERE id != resource:[] /*PARALLEL*/;"
             .into_query()
             .expect("Failed to create query for all resources")
     }
@@ -291,7 +291,7 @@ impl Resource {
             format!(
                 "$resources = array::concat(
                     $resources,
-                    SELECT * FROM resource WHERE resource_type = ${binding} PARALLEL
+                    SELECT * FROM resource WHERE resource_type = ${binding} /*PARALLEL*/
                 ).distinct();"
             )
             .into_query()
