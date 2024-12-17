@@ -8,7 +8,7 @@ use surrealdb::{
 };
 use tokio::sync::{OnceCell, RwLock};
 
-use crate::{auth::Auth, env::Env, macros::*, Result};
+use crate::{auth::AccountAuth, env::Env, macros::*, Result};
 
 const DB: OnceCell<Surreal<Db>> = OnceCell::const_new();
 
@@ -77,8 +77,8 @@ pub(crate) async fn db_for_customer_data_account(
     Ok(db)
 }
 
-pub(crate) async fn db(
-    Extension(auth): Extension<Auth>,
+pub(crate) async fn db<A: AccountAuth>(
+    Extension(auth): Extension<A>,
     mut req: Request,
     next: Next,
 ) -> Result<Response> {
@@ -88,8 +88,14 @@ pub(crate) async fn db(
 
     let db = DB
         .get_or_try_init(|| async {
+            let path = if Env::is_local_dev() {
+                format!("{DYNAMODB_TABLE_PREFIX};profile=ddbtest")
+            } else {
+                DYNAMODB_TABLE_PREFIX.to_string()
+            };
+
             Surreal::new::<surrealdb::engine::local::DynamoDB>((
-                DYNAMODB_TABLE_PREFIX,
+                &path,
                 Config::default()
                     .capabilities(Capabilities::default().with_live_query_notifications(false))
                     .strict(),
@@ -100,6 +106,8 @@ pub(crate) async fn db(
         .clone();
 
     db.use_ns(account_id).use_db("resources").await?;
+
+    auth.validate(&db).await?;
 
     req.extensions_mut().insert(db);
 

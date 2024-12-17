@@ -9,7 +9,7 @@ use tracing::{info, trace, warn};
 
 use crate::{
     account::{Account, AccountPublic, AccountQueries, ServiceDataLocation},
-    auth::Auth,
+    auth::DashboardAuth,
     db::{accounts_db, db_for_customer_data_account, dynamodb_resources_table_name_for_account},
     env::Env,
     macros::*,
@@ -22,7 +22,7 @@ pub(crate) struct ListAccountsResponse {
 }
 
 pub(crate) async fn list_accounts(
-    Extension(auth): Extension<Auth>,
+    Extension(auth): Extension<DashboardAuth>,
 ) -> Result<Json<ListAccountsResponse>> {
     let accounts = auth
         .principal()
@@ -388,7 +388,7 @@ async fn create_account_service_data_table(account: &Account) -> anyhow::Result<
 }
 
 pub(crate) async fn create_account(
-    Extension(auth): Extension<Auth>,
+    Extension(auth): Extension<DashboardAuth>,
 ) -> Result<Json<AccountPublic>> {
     let aws_region = Env::aws_region();
     let endpoint = Env::endpoint();

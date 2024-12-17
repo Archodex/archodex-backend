@@ -93,7 +93,9 @@ pub(crate) mod u32 {
 }
 
 pub(crate) mod uuid {
-    use serde::Deserialize;
+    use std::marker::PhantomData;
+
+    use serde::{de::VariantAccess, Deserialize};
     use surrealdb::Uuid;
 
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
@@ -107,6 +109,32 @@ pub(crate) mod uuid {
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a String in UUID format or a SurrealDB RecordId")
+            }
+
+            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::EnumAccess<'de>,
+            {
+                let (variant, value) = data
+                    .variant::<String>()
+                    .or_else(|err| {
+                        Err(serde::de::Error::custom(format!("Failed to deserialize surrealdb::sql::Uuid: Enum variant type could not be deserialized as a `String`: {err}")))
+                    })?;
+
+                if variant != "Uuid" {
+                    return Err(serde::de::Error::unknown_variant(&variant, &["Uuid"]));
+                }
+
+                let sql_uuid = value
+                    .newtype_variant_seed::<PhantomData<surrealdb::sql::Uuid>>(PhantomData)
+                    .or_else(|_| {
+                        Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::NewtypeVariant,
+                            &"a surrealdb::sql::Uuid",
+                        ))
+                    })?;
+
+                Ok(sql_uuid.into())
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>

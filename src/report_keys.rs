@@ -1,21 +1,16 @@
 use std::collections::HashMap;
 
-use aes_gcm::{
-    aead::{self, Aead},
-    AeadCore, Aes128Gcm, KeyInit,
-};
 use axum::{extract::Path, Extension, Json};
-use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::local::Db,
     sql::statements::{BeginStatement, CommitStatement},
     Surreal,
 };
+use tracing::info;
 
 use crate::{
-    auth::Auth,
-    env::Env,
+    auth::{AccountAuth, DashboardAuth},
     macros::*,
     report_key::{ReportKey, ReportKeyPublic, ReportKeyQueries},
     Result,
@@ -23,7 +18,7 @@ use crate::{
 
 #[derive(Serialize)]
 pub(crate) struct ListReportKeysResponse {
-    report_keys: Vec<ReportKeyPublic>,
+    report_api_keys: Vec<ReportKeyPublic>,
 }
 
 pub(crate) async fn list_report_keys(
@@ -32,9 +27,10 @@ pub(crate) async fn list_report_keys(
     let mut begin = BeginStatement::default();
     begin.readonly = true;
 
-    let report_keys = db
+    let report_api_keys = db
         .query(begin)
         .list_report_keys_query()
+        .query(CommitStatement::default())
         .await?
         .check()?
         .take::<Vec<ReportKey>>(0)?
@@ -42,7 +38,7 @@ pub(crate) async fn list_report_keys(
         .map(ReportKeyPublic::from)
         .collect();
 
-    Ok(Json(ListReportKeysResponse { report_keys }))
+    Ok(Json(ListReportKeysResponse { report_api_keys }))
 }
 
 #[derive(Deserialize)]
@@ -52,52 +48,48 @@ pub(crate) struct CreateReportKeyRequest {
 
 #[derive(Serialize)]
 pub(crate) struct CreateReportKeyResponse {
-    report_key_value: String,
+    report_api_key: ReportKeyPublic,
+    report_api_key_value: String,
 }
 
 pub(crate) async fn create_report_key(
-    Extension(auth): Extension<Auth>,
+    Extension(auth): Extension<DashboardAuth>,
     Extension(db): Extension<Surreal<Db>>,
     Json(req): Json<CreateReportKeyRequest>,
 ) -> Result<Json<CreateReportKeyResponse>> {
-    let report_key = ReportKey::new(req.description, auth.principal().clone());
-
-    db.query(BeginStatement::default())
-        .create_report_key_query(&report_key)
-        .query(CommitStatement::default())
-        .await?
-        .check()?;
-
-    let cipher = Aes128Gcm::new(Env::api_key_kms_data_key().await);
-    let nonce = Aes128Gcm::generate_nonce(&mut rand::rngs::OsRng);
-    let aad = format!("endpoint={}", Env::endpoint());
-    let encrypted_account_id = cipher
-        .encrypt(
-            &nonce,
-            aead::Payload {
-                msg: auth
-                    .account_id()
-                    .expect("account ID should exist in auth context")
-                    .as_bytes(),
-                aad: aad.as_bytes(),
-            },
+    let report_api_key = ReportKey::new(req.description, auth.principal().clone());
+    let report_api_key_value = report_api_key
+        .generate_value(
+            auth.account_id()
+                .expect("account ID should exist in auth context"),
         )
-        .map_err(|err| anyhow!("Failed to encrypt account ID: {err}"))?;
+        .await?;
 
-    let mut report_key_value = Vec::<u8>::new();
-    report_key_value.push(Env::endpoint().len() as u8);
-    report_key_value.extend_from_slice(Env::endpoint().as_bytes());
-    report_key_value.push(nonce.len() as u8);
-    report_key_value.extend_from_slice(nonce.as_slice());
-    report_key_value.extend_from_slice(&encrypted_account_id);
+    let query = db
+        .query(BeginStatement::default())
+        .create_report_key_query(&report_api_key)
+        .query(CommitStatement::default());
 
-    let report_key_value = BASE64_STANDARD.encode(&report_key_value);
+    info!(
+        query = tracing::field::debug(&query),
+        "Creating report key {report_key_id}",
+        report_key_id = report_api_key.id()
+    );
 
-    Ok(Json(CreateReportKeyResponse { report_key_value }))
+    let report_api_key = query
+        .await?
+        .check()?
+        .take::<Option<ReportKey>>(0)?
+        .expect("Create report API key query should return a report key instance");
+
+    Ok(Json(CreateReportKeyResponse {
+        report_api_key: ReportKeyPublic::from(report_api_key),
+        report_api_key_value,
+    }))
 }
 
 pub(crate) async fn revoke_report_key(
-    Extension(auth): Extension<Auth>,
+    Extension(auth): Extension<DashboardAuth>,
     Extension(db): Extension<Surreal<Db>>,
     Path(params): Path<HashMap<String, String>>,
 ) -> Result<Json<()>> {

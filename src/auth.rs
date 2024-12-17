@@ -12,11 +12,22 @@ use josekit::{
     jws::alg::rsassa::{RsassaJwsAlgorithm, RsassaJwsVerifier},
     jwt, JoseError,
 };
-use surrealdb::Uuid;
+use reqwest::header::AUTHORIZATION;
+use surrealdb::{
+    engine::local::Db,
+    sql::statements::{BeginStatement, CommitStatement},
+    Surreal, Uuid,
+};
 use tokio::sync::OnceCell;
-use tracing::{debug, info};
+use tracing::{info, warn};
 
-use crate::{env::Env, macros::*, user::User, Result};
+use crate::{
+    env::Env,
+    macros::*,
+    report_key::{ReportKey, ReportKeyIsValidQueryResponse, ReportKeyQueries},
+    user::User,
+    Result,
+};
 
 static JWK_SET: OnceCell<(JwkSet, HashMap<String, RsassaJwsVerifier>)> = OnceCell::const_new();
 
@@ -73,23 +84,35 @@ pub(crate) async fn jwks(
         .await
 }
 
+pub(crate) trait AccountAuth {
+    fn account_id(&self) -> Option<&String>;
+    async fn validate(&self, db: &Surreal<Db>) -> Result<()>;
+}
+
 #[derive(Clone)]
-pub(crate) struct Auth {
+pub(crate) struct DashboardAuth {
     principal: User,
     account_id: Option<String>,
 }
 
-impl Auth {
+impl DashboardAuth {
     pub(crate) fn principal(&self) -> &User {
         &self.principal
     }
+}
 
-    pub(crate) fn account_id(&self) -> Option<&String> {
+impl AccountAuth for DashboardAuth {
+    fn account_id(&self) -> Option<&String> {
         self.account_id.as_ref()
+    }
+
+    // No need to validate Cognito JWTs with DB queries
+    async fn validate(&self, _db: &Surreal<Db>) -> Result<()> {
+        Ok(())
     }
 }
 
-pub(crate) async fn auth(
+pub(crate) async fn dashboard_auth(
     Path(params): Path<HashMap<String, String>>,
     mut req: Request,
     next: Next,
@@ -97,7 +120,7 @@ pub(crate) async fn auth(
     let cookies = CookieJar::from_headers(req.headers());
 
     let Some(access_token) = cookies.get("accessToken") else {
-        info!("Missing accessToken cookie");
+        warn!("Missing accessToken cookie");
         unauthorized!();
     };
 
@@ -118,7 +141,7 @@ pub(crate) async fn auth(
     }) {
         Ok((payload, _header)) => {
             let Some(josekit::Value::String(sub)) = payload.claim("sub") else {
-                info!("Missing or invalid sub claim in JWT");
+                warn!("Missing or invalid sub claim in JWT");
                 unauthorized!();
             };
 
@@ -132,13 +155,13 @@ pub(crate) async fn auth(
             match validator.validate(&payload) {
                 Ok(()) => Result::Ok(sub.to_owned()),
                 Err(err) => {
-                    info!("Failed to validate JWT: {err}");
+                    warn!("Failed to validate JWT: {err}");
                     unauthorized!();
                 }
             }
         }
         Err(err) => {
-            info!("Failed to verify JWT: {err}");
+            warn!("Failed to verify JWT: {err}");
             unauthorized!();
         }
     }?;
@@ -146,7 +169,7 @@ pub(crate) async fn auth(
     let user_id = Uuid::parse_str(&user_id)
         .with_context(|| format!("Failed to parse user ID {user_id:?} as UUID"))?;
 
-    debug!("Authenticated as user ID {user_id}");
+    info!("Authenticated as user ID {user_id}");
 
     let user_id = if Env::is_local_dev() {
         let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
@@ -159,9 +182,82 @@ pub(crate) async fn auth(
 
     let account_id = params.get("account_id").cloned();
 
-    req.extensions_mut().insert(Auth {
+    req.extensions_mut().insert(DashboardAuth {
         principal: User::new(user_id),
         account_id,
+    });
+
+    Ok(next.run(req).await)
+}
+
+#[derive(Clone)]
+pub(crate) struct ReportKeyAuth {
+    account_id: String,
+    key_id: u32,
+}
+
+impl AccountAuth for ReportKeyAuth {
+    fn account_id(&self) -> Option<&String> {
+        Some(&self.account_id)
+    }
+
+    async fn validate(&self, db: &Surreal<Db>) -> Result<()> {
+        let mut begin_statement = BeginStatement::default();
+        begin_statement.readonly = true;
+
+        let Some(response) = db
+            .query(begin_statement)
+            .report_key_is_valid_query(self.key_id)
+            .query(CommitStatement::default())
+            .await?
+            .check()?
+            .take::<Option<ReportKeyIsValidQueryResponse>>(0)?
+        else {
+            warn!(
+                "Report key {key_id} does not exist in account {account_id:?}",
+                key_id = self.key_id,
+                account_id = self.account_id
+            );
+            unauthorized!();
+        };
+
+        if !response.is_valid() {
+            warn!(
+                "Report key {key_id} was revoked in account {account_id:?}",
+                key_id = self.key_id,
+                account_id = self.account_id
+            );
+            unauthorized!();
+        }
+
+        Ok(())
+    }
+}
+
+pub(crate) async fn report_key_auth(mut req: Request, next: Next) -> Result<Response> {
+    let Some(report_key_value) = req.headers().get(AUTHORIZATION) else {
+        warn!("Missing Authorization header");
+        unauthorized!();
+    };
+
+    let Ok(report_key_value) = report_key_value.to_str() else {
+        warn!("Failed to parse Authorization header value as string");
+        unauthorized!();
+    };
+
+    let (account_id, key_id) = match ReportKey::validate_value(report_key_value).await {
+        Ok((account_id, key_id)) => (account_id, key_id),
+        Err(err) => {
+            warn!("Failed to validate report key value: {err:#?}");
+            unauthorized!();
+        }
+    };
+
+    info!("Validated report key value for account ID {account_id:?} and key ID {key_id}");
+
+    req.extensions_mut().insert(ReportKeyAuth {
+        account_id: account_id.clone(),
+        key_id,
     });
 
     Ok(next.run(req).await)

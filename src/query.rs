@@ -21,7 +21,7 @@ pub(super) struct QueryResponse {
 }
 
 pub(super) async fn query(
-    Path(r#type): Path<QueryType>,
+    Path((_account_id, r#type)): Path<(String, QueryType)>,
     Extension(db): Extension<Surreal<Db>>,
 ) -> Result<Json<QueryResponse>> {
     const BEGIN: &str = "BEGIN READONLY; $resources = []; $events = [];";
