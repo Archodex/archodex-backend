@@ -23,7 +23,7 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "ARCHODEX_DEV_MODE": "local",
-        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
+        "AWS_PROFILE": "archodex-dev-local",
         //"RUST_LOG": "surreal=trace,info",
         "COLORTERM": "truecolor",
         "AWS_PARTITION": "aws",
@@ -58,7 +58,7 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
-        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
+        "AWS_PROFILE": "archodex-dev-local",
         //"RUST_LOG": "surreal=trace,info",
         "COLORTERM": "truecolor",
         "AWS_PARTITION": "aws",
