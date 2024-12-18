@@ -579,6 +579,40 @@ Resources:
               - Effect: Allow
                 Action: organizations:ListAccountsForParent
                 Resource: !Sub arn:${AWS::Partition}:organizations::*:ou/*/${CustomerDataOUId}
+        - PolicyName: GetCustomerDataAccountTableCounts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: cloudwatch:GetMetricData
+                Resource: "*"
+        - PolicyName: AssumeBackendAPICustomerDataManagementRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:${AWS::Partition}:iam::*:role/BackendAPICustomerDataManagementRole
+                Condition:
+                  ForAnyValue:StringEquals:
+                    aws:ResourceOrgPaths: !Sub ${EnvironmentOrganizationPath}/${CustomerDataOUId}/
+        - PolicyName: UseAPIKeyCustomerDataKey
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/api_key_customer_data_key
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  ForAnyValue:StringEquals:
+                    kms:ResourceAliases: alias/ArchodexBackendCustomerDataKey
+                  StringEquals:
+                    kms:EncryptionContext:Purpose: APIKeys
+                  ForAllValues:StringEquals:
+                    kms:EncryptionContextKeys: Purpose
       RoleName: ArchodexBackendAPIRole
 
   RegionalBackendsStackSetExecutionRole:
