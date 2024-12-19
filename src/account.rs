@@ -1,8 +1,12 @@
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use surrealdb::{engine::local::Db, Surreal};
 
-use crate::{env::Env, next_binding, surrealdb_deserializers, user::User};
+use crate::{
+    db::db_for_customer_data_account, env::Env, macros::*, next_binding, surrealdb_deserializers,
+    user::User,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct ServiceDataLocation {
@@ -77,6 +81,20 @@ impl Account {
     pub(crate) fn service_data_location(&self) -> Option<&ServiceDataLocation> {
         self.service_data_location.as_ref()
     }
+
+    pub(crate) async fn surrealdb_client(&self) -> anyhow::Result<Surreal<Db>> {
+        let Some(service_data_location) = &self.service_data_location else {
+            bail!("Account instance missing service data location when attempting to create SurrealDB client");
+        };
+
+        ensure!(
+            service_data_location.r#type == "dynamodb",
+            "Unsupported service data location type ({type}) when constructing SurrealDB client",
+            type = service_data_location.r#type
+        );
+
+        db_for_customer_data_account(&service_data_location.account_id, &self.id, None).await
+    }
 }
 
 pub(crate) trait AccountQueries<'r, C: surrealdb::Connection> {
@@ -86,6 +104,7 @@ pub(crate) trait AccountQueries<'r, C: surrealdb::Connection> {
         account: &Account,
         user: &User,
     ) -> surrealdb::method::Query<'r, C>;
+    fn get_account_by_id(self, account_id: String) -> surrealdb::method::Query<'r, C>;
 }
 
 impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::Query<'r, C> {
@@ -114,6 +133,16 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
         ))
         .bind((user_binding, surrealdb::sql::Thing::from(user)))
         .bind((account_binding, surrealdb::sql::Thing::from(account)))
+    }
+
+    fn get_account_by_id(self, account_id: String) -> surrealdb::method::Query<'r, C> {
+        let account_binding = next_binding();
+
+        self.query(format!("SELECT * FROM ONLY ${account_binding}"))
+            .bind((
+                account_binding,
+                surrealdb::sql::Thing::from(("account", surrealdb::sql::Id::String(account_id))),
+            ))
     }
 }
 

@@ -543,16 +543,6 @@ Resources:
               - Effect: Allow
                 Action: cognito-idp:AdminGetUser
                 Resource: !GetAtt CognitoUserPool.Arn
-        - PolicyName: CreateCustomerTables
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:CreateTable
-                  - dynamodb:DescribeTable
-                  - dynamodb:UpdateContinuousBackups
-                Resource: !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-service-data-*
         - PolicyName: ReadWriteAccountAndCustomerTables
           PolicyDocument:
             Version: "2012-10-17"
@@ -569,7 +559,12 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/${AccountsGlobalTable}
-                  - !Sub arn:${AWS::Partition}:dynamodb:*:${AWS::AccountId}:table/archodex-service-data-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:*:*:table/archodex-service-data-*
+                Condition:
+                  ForAnyValue:StringEquals:
+                    aws:ResourceOrgPaths:
+                      - !Sub ${EnvironmentOrganizationPath}/
+                      - !Sub ${EnvironmentOrganizationPath}/${CustomerDataOUId}/
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -577,8 +572,22 @@ Resources:
                   - kms:Encrypt
                 Resource: "*"
                 Condition:
+                  ForAnyValue:StringEquals:
+                    kms:ResourceAliases: alias/ArchodexBackendCustomerDataKey
                   StringEquals:
                     aws:CalledViaLast: !Sub dynamodb.${AWS::URLSuffix}
+        - PolicyName: DeleteCustomerTables
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DeleteTable
+                  - dynamodb:UpdateTable
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:*:*:table/archodex-service-data-*
+                Condition:
+                  ForAnyValue:StringEquals:
+                    aws:ResourceOrgPaths: !Sub ${EnvironmentOrganizationPath}/${CustomerDataOUId}/
         - PolicyName: ListCustomerDataAccounts
           PolicyDocument:
             Version: "2012-10-17"

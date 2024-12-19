@@ -24,7 +24,7 @@
       "env": {
         "ARCHODEX_DEV_MODE": "local",
         "AWS_PROFILE": "archodex-dev-local",
-        //"RUST_LOG": "surreal=trace,info",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
         "COLORTERM": "truecolor",
         "AWS_PARTITION": "aws",
         "AWS_REGION": "us-west-2",
@@ -58,8 +58,9 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
+        "ARCHODEX_DEV_MODE": "remote",
         "AWS_PROFILE": "archodex-dev-local",
-        //"RUST_LOG": "surreal=trace,info",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
         "COLORTERM": "truecolor",
         "AWS_PARTITION": "aws",
         "AWS_REGION": "us-west-2",

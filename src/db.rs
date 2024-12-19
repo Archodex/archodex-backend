@@ -1,18 +1,35 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use anyhow::Context;
 use axum::{extract::Request, middleware::Next, response::Response, Extension};
 use surrealdb::{
     engine::local::Db,
     opt::{capabilities::Capabilities, Config},
+    sql::statements::CommitStatement,
     Surreal,
 };
 use tokio::sync::{OnceCell, RwLock};
 
-use crate::{auth::AccountAuth, env::Env, macros::*, Result};
+use crate::{
+    account::{Account, AccountQueries},
+    auth::AccountAuth,
+    env::Env,
+    macros::*,
+    Result,
+};
 
-const DB: OnceCell<Surreal<Db>> = OnceCell::const_new();
+pub(crate) const DYNAMODB_TABLE_PREFIX: &'static str = "archodex-service-data-";
 
-const DYNAMODB_TABLE_PREFIX: &'static str = "archodex-service-data-";
+#[derive(Default)]
+pub(crate) struct BeginReadonlyStatement;
+
+impl surrealdb::opt::IntoQuery for BeginReadonlyStatement {
+    fn into_query(self) -> surrealdb::Result<Vec<surrealdb::sql::Statement>> {
+        let mut begin = surrealdb::sql::statements::BeginStatement::default();
+        begin.readonly = true;
+        Ok(vec![surrealdb::sql::Statement::Begin(begin)])
+    }
+}
 
 pub(crate) fn dynamodb_resources_table_name_for_account(account_id: &str) -> String {
     format!("{DYNAMODB_TABLE_PREFIX}a{account_id}-resources")
@@ -86,28 +103,18 @@ pub(crate) async fn db<A: AccountAuth>(
         bail!("Missing account ID in auth extension");
     };
 
-    let db = DB
-        .get_or_try_init(|| async {
-            let path = if Env::is_local_dev() {
-                format!("{DYNAMODB_TABLE_PREFIX};profile=ddbtest")
-            } else {
-                DYNAMODB_TABLE_PREFIX.to_string()
-            };
-
-            Surreal::new::<surrealdb::engine::local::DynamoDB>((
-                &path,
-                Config::default()
-                    .capabilities(Capabilities::default().with_live_query_notifications(false))
-                    .strict(),
-            ))
-            .await
-        })
+    let account = accounts_db()
         .await?
-        .clone();
+        .query(BeginReadonlyStatement::default())
+        .get_account_by_id(account_id.to_owned())
+        .query(CommitStatement::default())
+        .await?
+        .check()?
+        .take::<Option<Account>>(0)
+        .with_context(|| format!("Failed to get record for account ID {account_id:?}"))?
+        .ok_or_else(|| anyhow!("Account record not found for ID {account_id:?}"))?;
 
-    db.use_ns(format!("a{account_id}"))
-        .use_db("resources")
-        .await?;
+    let db = account.surrealdb_client().await?;
 
     auth.validate(&db).await?;
 
