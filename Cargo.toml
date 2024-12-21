@@ -38,6 +38,7 @@ chrono = { version = "0.4.38", default-features = false, features = ["std"] }
 hex = { version = "0.4.3", features = ["serde"] }
 josekit = { version = "0.10.0", default-features = false, features = ["vendored"] }
 migrator = { path = "migrator" }
+prost = "0.13.4"
 rand = "0.8.5"
 reqwest = { version = "0.12.9", default-features = false, features = ["http2", "rustls-tls"] }
 serde = { version = "1.0.202", features = ["derive"] }
@@ -50,3 +51,6 @@ tracing.workspace = true
 
 [patch.crates-io]
 surrealdb = { git = "https://github.com/txase/surrealdb.git" }
+
+[build-dependencies]
+prost-build = "0.13.4"

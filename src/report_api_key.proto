@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package archodex.report_api_key;
+
+message ReportApiKey {
+  uint32 report_api_key_version = 1; // Always set to 1
+  string endpoint = 2;
+  bytes account_salt = 3; // Always 16 bytes long
+  bytes nonce = 4; // Always 12 bytes long for AES128-GCM
+  bytes encrypted_contents = 5;
+}
+
+// Encrypted with AES128-GCM.
+message ReportApiKeyEncryptedContents {
+  fixed32 account_id = 1;
+}
+
+message ReportApiKeyEncryptedAAD {
+  fixed32 key_id = 1;
+  string endpoint = 2;
+  bytes account_salt = 3;
+}

@@ -37,6 +37,8 @@ pub(crate) struct Account {
     id: String,
     endpoint: String,
     service_data_location: Option<ServiceDataLocation>,
+    #[serde(deserialize_with = "surrealdb_deserializers::bytes::deserialize")]
+    salt: Vec<u8>,
     created_at: Option<DateTime<Utc>>,
 }
 
@@ -70,6 +72,7 @@ impl Account {
             },
             endpoint,
             service_data_location,
+            salt: rand::thread_rng().gen::<[u8; 16]>().to_vec(),
             created_at: None,
         }
     }
@@ -80,6 +83,10 @@ impl Account {
 
     pub(crate) fn service_data_location(&self) -> Option<&ServiceDataLocation> {
         self.service_data_location.as_ref()
+    }
+
+    pub(crate) fn salt(&self) -> &[u8] {
+        &self.salt
     }
 
     pub(crate) async fn surrealdb_client(&self) -> anyhow::Result<Surreal<Db>> {
@@ -112,12 +119,14 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
         let account_binding = next_binding();
         let endpoint_binding = next_binding();
         let service_data_location_binding = next_binding();
+        let salt_binding = next_binding();
 
         self
-            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_location: ${service_data_location_binding} }} RETURN NONE"))
+            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_location: ${service_data_location_binding}, salt: ${salt_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
             .bind((endpoint_binding, account.endpoint.to_owned()))
             .bind((service_data_location_binding, account.service_data_location.to_owned()))
+            .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.to_owned())))
     }
 
     fn add_account_access_for_user(

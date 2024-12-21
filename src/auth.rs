@@ -25,7 +25,7 @@ use crate::{
     db::QueryCheckFirstRealError,
     env::Env,
     macros::*,
-    report_key::{ReportKey, ReportKeyIsValidQueryResponse, ReportKeyQueries},
+    report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
     Result,
 };
@@ -192,12 +192,12 @@ pub(crate) async fn dashboard_auth(
 }
 
 #[derive(Clone)]
-pub(crate) struct ReportKeyAuth {
+pub(crate) struct ReportApiKeyAuth {
     account_id: String,
     key_id: u32,
 }
 
-impl AccountAuth for ReportKeyAuth {
+impl AccountAuth for ReportApiKeyAuth {
     fn account_id(&self) -> Option<&String> {
         Some(&self.account_id)
     }
@@ -208,11 +208,11 @@ impl AccountAuth for ReportKeyAuth {
 
         let Some(response) = db
             .query(begin_statement)
-            .report_key_is_valid_query(self.key_id)
+            .report_api_key_is_valid_query(self.key_id)
             .query(CommitStatement::default())
             .await?
             .check_first_real_error()?
-            .take::<Option<ReportKeyIsValidQueryResponse>>(0)?
+            .take::<Option<ReportApiKeyIsValidQueryResponse>>(0)?
         else {
             warn!(
                 "Report key {key_id} does not exist in account {account_id:?}",
@@ -235,18 +235,18 @@ impl AccountAuth for ReportKeyAuth {
     }
 }
 
-pub(crate) async fn report_key_auth(mut req: Request, next: Next) -> Result<Response> {
-    let Some(report_key_value) = req.headers().get(AUTHORIZATION) else {
+pub(crate) async fn report_api_key_auth(mut req: Request, next: Next) -> Result<Response> {
+    let Some(report_api_key_value) = req.headers().get(AUTHORIZATION) else {
         warn!("Missing Authorization header");
         unauthorized!();
     };
 
-    let Ok(report_key_value) = report_key_value.to_str() else {
+    let Ok(report_api_key_value) = report_api_key_value.to_str() else {
         warn!("Failed to parse Authorization header value as string");
         unauthorized!();
     };
 
-    let (account_id, key_id) = match ReportKey::validate_value(report_key_value).await {
+    let (account_id, key_id) = match ReportApiKey::validate_value(report_api_key_value).await {
         Ok((account_id, key_id)) => (account_id, key_id),
         Err(err) => {
             warn!("Failed to validate report key value: {err:#?}");
@@ -256,7 +256,7 @@ pub(crate) async fn report_key_auth(mut req: Request, next: Next) -> Result<Resp
 
     info!("Validated report key value for account ID {account_id:?} and key ID {key_id}");
 
-    req.extensions_mut().insert(ReportKeyAuth {
+    req.extensions_mut().insert(ReportApiKeyAuth {
         account_id: account_id.clone(),
         key_id,
     });

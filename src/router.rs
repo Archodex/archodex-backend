@@ -8,9 +8,9 @@ use tracing::Level;
 
 use crate::{
     accounts,
-    auth::{dashboard_auth, report_key_auth, DashboardAuth, ReportKeyAuth},
+    auth::{dashboard_auth, report_api_key_auth, DashboardAuth, ReportApiKeyAuth},
     db::db,
-    oauth2, principal_chain, query, report, report_keys,
+    oauth2, principal_chain, query, report, report_api_keys,
 };
 
 pub fn router() -> Router {
@@ -37,11 +37,17 @@ pub fn router() -> Router {
             Router::new()
                 .route("/query/:type", get(query::query))
                 .route("/principal_chain", get(principal_chain::get))
-                .route("/report_keys", get(report_keys::list_report_keys))
-                .route("/report_keys", post(report_keys::create_report_key))
                 .route(
-                    "/report_key/:report_key_id",
-                    delete(report_keys::revoke_report_key),
+                    "/report_api_keys",
+                    get(report_api_keys::list_report_api_keys),
+                )
+                .route(
+                    "/report_api_keys",
+                    post(report_api_keys::create_report_api_key),
+                )
+                .route(
+                    "/report_api_key/:report_api_key_id",
+                    delete(report_api_keys::revoke_report_api_key),
                 ),
         )
         .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<DashboardAuth>)))
@@ -50,14 +56,14 @@ pub fn router() -> Router {
         .layer(ServiceBuilder::new().layer(middleware::from_fn(dashboard_auth)))
         .layer(cors_layer.clone());
 
-    let report_key_authed_router = Router::new()
+    let report_api_key_authed_router = Router::new()
         .route("/report", post(report::report))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<ReportKeyAuth>)))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(report_key_auth)));
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<ReportApiKeyAuth>)))
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(report_api_key_auth)));
 
     unauthed_router
         .merge(dashboard_authed_router)
-        .merge(report_key_authed_router)
+        .merge(report_api_key_authed_router)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))

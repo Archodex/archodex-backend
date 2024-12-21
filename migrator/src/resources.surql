@@ -2,14 +2,15 @@ BEGIN;
 
 DEFINE ANALYZER IF NOT EXISTS code TOKENIZERS class,camel FILTERS ascii,snowball(english);
 
-DEFINE TABLE IF NOT EXISTS report_key SCHEMAFULL TYPE NORMAL;
-DEFINE FIELD IF NOT EXISTS id ON TABLE report_key TYPE int READONLY
+DEFINE TABLE IF NOT EXISTS report_api_key SCHEMAFULL TYPE NORMAL;
+DEFINE FIELD IF NOT EXISTS id ON TABLE report_api_key TYPE int READONLY
     ASSERT $this.id >= 0;
-DEFINE FIELD IF NOT EXISTS description ON TABLE report_key TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS created_at ON TABLE report_key TYPE datetime READONLY DEFAULT time::now();
-DEFINE FIELD IF NOT EXISTS created_by ON TABLE report_key TYPE record<user> READONLY;
-DEFINE FIELD IF NOT EXISTS revoked_at ON TABLE report_key TYPE option<datetime>;
-DEFINE FIELD IF NOT EXISTS revoked_by ON TABLE report_key TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS description ON TABLE report_api_key TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS version ON TABLE report_api_key TYPE int READONLY VALUE 1;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE report_api_key TYPE datetime READONLY DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS created_by ON TABLE report_api_key TYPE record<user> READONLY;
+DEFINE FIELD IF NOT EXISTS revoked_at ON TABLE report_api_key TYPE option<datetime>;
+DEFINE FIELD IF NOT EXISTS revoked_by ON TABLE report_api_key TYPE option<record<user>>;
 
 DEFINE TABLE IF NOT EXISTS resource SCHEMAFULL TYPE NORMAL;
 DEFINE FIELD IF NOT EXISTS id ON TABLE resource TYPE array<array<string, 2>> READONLY;

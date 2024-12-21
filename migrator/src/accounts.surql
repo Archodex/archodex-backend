@@ -8,6 +8,8 @@ DEFINE FIELD IF NOT EXISTS endpoint ON TABLE account TYPE string READONLY
   ASSERT string::is::url($this.endpoint);
 DEFINE FIELD IF NOT EXISTS service_data_location ON TABLE account TYPE option<{ type: "dynamodb", partition: "aws", region: string, account_id: string }> READONLY
   ASSERT type::is::none($this.service_data_location) || string::len($this.service_data_location.account_id) == 12 && string::is::numeric($this.service_data_location.account_id);
+DEFINE FIELD IF NOT EXISTS salt ON TABLE account TYPE bytes READONLY
+  ASSERT bytes::len($this.salt) == 16;
 DEFINE FIELD IF NOT EXISTS created_at ON TABLE account TYPE datetime READONLY DEFAULT time::now();
 
 DEFINE TABLE IF NOT EXISTS user SCHEMAFULL TYPE NORMAL;
