@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surrealdb::{engine::local::Db, Surreal};
 
-use crate::{macros::*, resource::ResourceId};
+use crate::{db::QueryCheckFirstRealError, macros::*, resource::ResourceId};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct PrincipalChainIdPart {
@@ -201,7 +201,7 @@ pub(super) async fn get(
         .query("SELECT first_seen_at, last_seen_at FROM type::thing('principal_chain', $id)")
         .bind(("id", surrealdb::sql::Array::from(id)))
         .await?
-        .check()?
+        .check_first_real_error()?
         .take(0)?;
 
     match res {

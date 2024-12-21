@@ -9,6 +9,7 @@ use surrealdb::{
     Surreal,
 };
 use tokio::sync::{OnceCell, RwLock};
+use tracing::warn;
 
 use crate::{
     account::{Account, AccountQueries},
@@ -109,7 +110,7 @@ pub(crate) async fn db<A: AccountAuth>(
         .get_account_by_id(account_id.to_owned())
         .query(CommitStatement::default())
         .await?
-        .check()?
+        .check_first_real_error()?
         .take::<Option<Account>>(0)
         .with_context(|| format!("Failed to get record for account ID {account_id:?}"))?
         .ok_or_else(|| anyhow!("Account record not found for ID {account_id:?}"))?;
@@ -148,4 +149,42 @@ pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Db>> {
         })
         .await?
         .clone())
+}
+
+// Like surrealdb::Response::check, but skips over QueryNotExecuted errors.
+// QueryNotExecuted errors are returned for all statements in a transaction
+// other than the statement that caused the error. If a transaction fails after
+// the first statement, the normal `check()` method will return QueryNotExecuted
+// instead of the true cause of the error.
+pub(crate) trait QueryCheckFirstRealError {
+    fn check_first_real_error(self) -> surrealdb::Result<Self>
+    where
+        Self: Sized;
+}
+
+impl QueryCheckFirstRealError for surrealdb::Response {
+    fn check_first_real_error(mut self) -> surrealdb::Result<Self> {
+        let errors = self.take_errors();
+
+        if errors.is_empty() {
+            return Ok(self);
+        }
+
+        if let Some((_, err)) = errors
+            .into_iter()
+            .filter(|(_, result)| {
+                !matches!(
+                    result,
+                    surrealdb::Error::Db(surrealdb::error::Db::QueryNotExecuted)
+                )
+            })
+            .min_by_key(|(query_num, _)| *query_num)
+        {
+            return Err(err);
+        }
+
+        warn!("Only QueryNotExecuted errors found in response, which shouldn't happen");
+
+        Err(surrealdb::Error::Db(surrealdb::error::Db::QueryNotExecuted))
+    }
 }

@@ -10,7 +10,10 @@ use tracing::{info, trace, warn};
 use crate::{
     account::{Account, AccountPublic, AccountQueries, ServiceDataLocation},
     auth::DashboardAuth,
-    db::{accounts_db, db_for_customer_data_account, dynamodb_resources_table_name_for_account},
+    db::{
+        accounts_db, db_for_customer_data_account, dynamodb_resources_table_name_for_account,
+        QueryCheckFirstRealError,
+    },
     env::Env,
     macros::*,
     Result,
@@ -437,7 +440,7 @@ pub(crate) async fn create_account(
         .add_account_access_for_user(&account, &principal)
         .query(CommitStatement::default())
         .await?
-        .check()?;
+        .check_first_real_error()?;
 
     Ok(Json(account.into()))
 }

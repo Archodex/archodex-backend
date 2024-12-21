@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
 use surrealdb::Uuid;
 
-use crate::{account::Account, db::accounts_db, macros::*, surrealdb_deserializers, Result};
+use crate::{
+    account::Account,
+    db::{accounts_db, QueryCheckFirstRealError},
+    macros::*,
+    surrealdb_deserializers, Result,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct User {
@@ -20,7 +25,7 @@ impl User {
             .query("UPSERT $user RETURN NONE")
             .bind(("user", surrealdb::sql::Thing::from(self)))
             .await?
-            .check()?;
+            .check_first_real_error()?;
 
         Ok(())
     }
@@ -36,7 +41,7 @@ impl User {
             .query("SELECT COUNT(->has_access->account) > 0 AS has_user_account FROM $user")
             .bind(("user", surrealdb::sql::Thing::from(self)))
             .await?
-            .check()?
+            .check_first_real_error()?
             .take::<Option<HasAccountResults>>(0)?
             .ok_or_else(|| anyhow!("Failed to query whether user has an account"))?
             .has_user_account)
@@ -53,7 +58,7 @@ impl User {
             .query("SELECT ->has_access->account.* AS accounts FROM ONLY $user")
             .bind(("user", surrealdb::sql::Thing::from(self)))
             .await?
-            .check()?
+            .check_first_real_error()?
             .take::<Option<ListAccountResults>>(0)?
             .unwrap_or_default()
             .accounts)

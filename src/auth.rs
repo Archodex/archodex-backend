@@ -22,6 +22,7 @@ use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
 use crate::{
+    db::QueryCheckFirstRealError,
     env::Env,
     macros::*,
     report_key::{ReportKey, ReportKeyIsValidQueryResponse, ReportKeyQueries},
@@ -210,7 +211,7 @@ impl AccountAuth for ReportKeyAuth {
             .report_key_is_valid_query(self.key_id)
             .query(CommitStatement::default())
             .await?
-            .check()?
+            .check_first_real_error()?
             .take::<Option<ReportKeyIsValidQueryResponse>>(0)?
         else {
             warn!(

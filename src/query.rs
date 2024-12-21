@@ -2,7 +2,10 @@ use axum::{extract::Path, Extension, Json};
 use serde::{Deserialize, Serialize};
 use surrealdb::{engine::local::Db, Surreal};
 
-use crate::{event::Event, global_container::GlobalContainer, resource::Resource, Result};
+use crate::{
+    db::QueryCheckFirstRealError, event::Event, global_container::GlobalContainer,
+    resource::Resource, Result,
+};
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -59,7 +62,7 @@ pub(super) async fn query(
         }
     };
 
-    let mut res = query.await?.check()?;
+    let mut res = query.await?.check_first_real_error()?;
 
     let query_response: Option<QueryResponse> = res.take(res.num_statements() - 1)?;
 

@@ -13,6 +13,7 @@ use surrealdb::{
 use tracing::info;
 
 use crate::{
+    db::QueryCheckFirstRealError,
     next_binding,
     resource::{surrealdb_thing_from_resource_id, ResourceId, ResourceIdPart},
     value::surrealdb_value_from_json_value,
@@ -343,7 +344,7 @@ pub(crate) async fn report(
 
     info!("Full query:\n{query:?}");
 
-    query.await?.check()?;
+    query.await?.check_first_real_error()?;
 
     Ok(())
 }
