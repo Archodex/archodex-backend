@@ -41,6 +41,8 @@
 				"ubuntu-latest=-self-hosted",
 				"--env",
 				"AWS_PROFILE=archodex-dev-AdministratorAccess",
+				"--job",
+				"deploy",
 			],
 			"problemMatcher": [],
 			"group": {
