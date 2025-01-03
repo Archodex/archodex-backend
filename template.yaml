@@ -36,6 +36,55 @@ Conditions:
       - archodex.com
 
 Resources:
+  AuthDomainSESFeedbackRecords:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      RecordSets:
+        - Name: mail.auth.{{resolve:ssm:/account_subdomain/domain}}
+          ResourceRecords:
+            - !Sub 10 feedback-smtp.${AWS::Region}.amazonses.com
+          TTL: 300
+          Type: MX
+        - Name: mail.auth.{{resolve:ssm:/account_subdomain/domain}}
+          ResourceRecords:
+            - '"v=spf1 include:amazonses.com ~all"'
+          TTL: 300
+          Type: TXT
+
+  AuthDomainSESIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: auth.{{resolve:ssm:/account_subdomain/domain}}
+      MailFromAttributes:
+        MailFromDomain: mail.auth.{{resolve:ssm:/account_subdomain/domain}}
+
+  AuthDomainSESIdentityVerificationRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      RecordSets:
+        - Name: !GetAtt AuthDomainSESIdentity.DkimDNSTokenName1
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt AuthDomainSESIdentity.DkimDNSTokenValue1
+        - Name: !GetAtt AuthDomainSESIdentity.DkimDNSTokenName2
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt AuthDomainSESIdentity.DkimDNSTokenValue2
+        - Name: !GetAtt AuthDomainSESIdentity.DkimDNSTokenName3
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt AuthDomainSESIdentity.DkimDNSTokenValue3
+        - Name: !Sub _dmarc.auth.{{resolve:ssm:/account_subdomain/domain}}
+          Type: TXT
+          TTL: 300
+          ResourceRecords:
+            - '"v=DMARC1; p=reject;"'
+
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -46,6 +95,10 @@ Resources:
       AutoVerifiedAttributes:
         - email
       DeletionProtection: ACTIVE
+      EmailConfiguration:
+        EmailSendingAccount: DEVELOPER
+        From: !Sub Archodex Authentication <noreply@${AuthDomainSESIdentity}>
+        SourceArn: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${AuthDomainSESIdentity}
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
       MfaConfiguration: OPTIONAL
