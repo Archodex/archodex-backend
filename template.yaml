@@ -93,10 +93,15 @@ Resources:
         - profile
       CallbackURLs:
         - !Sub https://api.${AWS::Region}.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
+        - !Sub https://app.{{resolve:ssm:/account_subdomain/domain}}/oauth2/passkeyresponse
         - !If
           - IsProd
           - !Ref AWS::NoValue
           - http://localhost:5731/oauth2/idpresponse
+        - !If
+          - IsProd
+          - !Ref AWS::NoValue
+          - http://localhost:5173/oauth2/passkeyresponse
       ClientName: app
       DefaultRedirectURI: !Sub https://api.${AWS::Region}.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
       ExplicitAuthFlows:
