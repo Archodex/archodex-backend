@@ -1060,7 +1060,7 @@ Resources:
         Name: AddHSTSHeader
         SecurityHeadersConfig:
           ContentSecurityPolicy:
-            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; object-src 'none'; base-uri 'none'; require-trusted-types-for 'script'; frame-ancestors 'none'; form-action 'none';
+            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none';
             Override: true
           ContentTypeOptions:
             Override: true
