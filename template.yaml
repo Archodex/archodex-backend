@@ -16,6 +16,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<List<String>>
     Description: Regions where customer accounts may be provisioned
     Default: /customer_data_regions
+  Domain:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Archodex environment domain name
+    Default: /account_subdomain/domain
   APIBootstrapMD5Sum:
     Type: String
     Description: MD5 checksum of the Lambda API function zip package
@@ -24,6 +28,12 @@ Mappings:
   Constants:
     Auth:
       RefreshTokenValidityInDays: 1
+
+Conditions:
+  IsProd:
+    Fn::Equals:
+      - !Ref Domain
+      - archodex.com
 
 Resources:
   CognitoUserPool:
@@ -83,7 +93,10 @@ Resources:
         - profile
       CallbackURLs:
         - !Sub https://api.${AWS::Region}.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
-        - http://localhost:5731/oauth2/idpresponse
+        - !If
+          - IsProd
+          - !Ref AWS::NoValue
+          - http://localhost:5731/oauth2/idpresponse
       ClientName: app
       DefaultRedirectURI: !Sub https://api.${AWS::Region}.{{resolve:ssm:/account_subdomain/domain}}/oauth2/idpresponse
       ExplicitAuthFlows:
@@ -153,7 +166,7 @@ Resources:
               - Effect: Allow
                 Action: ssm:GetParameters
                 Resource: !Sub arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/cross_region_parameter_custom_resource_service_token
-        - PolicyName: ManageCognitoACMCertificate
+        - PolicyName: ManageACMCertificates
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -169,8 +182,10 @@ Resources:
                 Resource: "*"
                 Condition:
                   ForAllValues:StringEquals:
-                    acm:DomainNames: auth.{{resolve:ssm:/account_subdomain/domain}}
-        - PolicyName: ManageCognitoACMRoute53Record
+                    acm:DomainNames:
+                      - app.{{resolve:ssm:/account_subdomain/domain}}
+                      - auth.{{resolve:ssm:/account_subdomain/domain}}
+        - PolicyName: ManageACMRoute53Records
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -180,7 +195,9 @@ Resources:
                 Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/{{resolve:ssm:/account_subdomain/hosted_zone_id}}
                 Condition:
                   ForAllValues:StringLike:
-                    route53:ResourceRecordSet: "*.auth.{{resolve:ssm:/account_subdomain/domain}}"
+                    route53:ResourceRecordSet:
+                      - "*.app.{{resolve:ssm:/account_subdomain/domain}}"
+                      - "*.auth.{{resolve:ssm:/account_subdomain/domain}}"
                   ForAllValues:StringEquals:
                     route53:ResourceRecordSetType: CNAME
 
@@ -274,12 +291,41 @@ Resources:
               Type: String
               Value: !Ref CognitoDomainCertificate
 
+          FrontendDomainCertificate:
+            Type: AWS::CertificateManager::Certificate
+            Properties:
+              DomainName: !Sub app.${Domain}
+              ValidationMethod: DNS
+              DomainValidationOptions:
+                - DomainName: !Sub app.${Domain}
+                  HostedZoneId: !Ref HostedZoneId
+          
+          FrontendDomainCertificateParameter:
+            Type: Custom::CrossRegionSSMParameter
+            Properties:
+              # Use unicode character escape to prevent parent stack dynamic referencing
+              ServiceToken: "{\u007Bresolve:ssm:/cross_region_parameter_custom_resource_service_token}}"
+              ServiceTimeout: 10
+              Region: !Ref ParentStackRegion
+              Description: Archodex Frontend Domain us-east-1 ACM Certificate ARN
+              Name: !Sub /${ParentStackName}/frontend_domain_certificate
+              Type: String
+              Value: !Ref FrontendDomainCertificate
+
+  CognitoDomainCertificateParameterValue:
+    DependsOn: CrossRegionArchodexEnvironmentStacks
+    Type: Custom::ParameterValue
+    Properties:
+      ServiceToken: "{{resolve:ssm:/parameter_value_custom_resource_service_token}}"
+      ServiceTimeout: 5
+      ParameterName: !Sub /${AWS::StackName}/cognito_domain_certificate
+
   CognitoUserPoolDomain:
     DependsOn: CrossRegionArchodexEnvironmentStacks
     Type: AWS::Cognito::UserPoolDomain
     Properties:
       CustomDomainConfig:
-        CertificateArn: "{{resolve:ssm:/archodex-backend/cognito_domain_certificate}}"
+        CertificateArn: !Ref CognitoDomainCertificateParameterValue
       Domain: auth.{{resolve:ssm:/account_subdomain/domain}}
       ManagedLoginVersion: 2
       UserPoolId: !Ref CognitoUserPool
@@ -465,6 +511,9 @@ Resources:
         };
       Policies:
         - Statement:
+            - Effect: Allow
+              Action: iam:CreateServiceLinkedRole
+              Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/replication.dynamodb.amazonaws.com/AWSServiceRoleForDynamoDBReplication
             - Effect: Allow
               Action: dynamodb:UpdateTable
               Resource: !GetAtt AccountsGlobalTable.Arn
@@ -772,6 +821,9 @@ Resources:
             # REST APIs are impossible to scope permissions for, so we have to allow all actions
             Statement:
               - Effect: Allow
+                Action: iam:CreateServiceLinkedRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/ops.apigateway.amazonaws.com/AWSServiceRoleForAPIGateway
+              - Effect: Allow
                 Action: apigateway:*
                 Resource: "*"
 
@@ -955,3 +1007,152 @@ Resources:
               EndpointConfiguration: REGIONAL
               FailOnWarnings: true
               TracingEnabled: true
+
+  FrontendAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-frontend-assets-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendAssetsBucketPolicyRequireEncryptionInTransit:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendAssetsBucket
+      PolicyDocument:
+        Id: RequireEncryptionInTransit
+        Version: "2012-10-17"
+        Statement:
+          - Principal: "*"
+            Action: "*"
+            Effect: Deny
+            Resource:
+              - !GetAtt FrontendAssetsBucket.Arn
+              - !Sub ${FrontendAssetsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  FrontendAssetsBucketOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-frontend-assets-access-control
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendDomainCertificateParameterValue:
+    DependsOn: CrossRegionArchodexEnvironmentStacks
+    Type: Custom::ParameterValue
+    Properties:
+      ServiceToken: "{{resolve:ssm:/parameter_value_custom_resource_service_token}}"
+      ServiceTimeout: 5
+      ParameterName: !Sub /${AWS::StackName}/frontend_domain_certificate
+
+  FrontendResponseHeaderPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: AddHSTSHeader
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; object-src 'none'; base-uri 'none'; require-trusted-types-for 'script'; frame-ancestors 'none'; form-action 'none';
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: no-referrer
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Override: true
+            Preload: true
+
+  FrontendCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - app.{{resolve:ssm:/account_subdomain/domain}}
+        CacheBehaviors:
+          - AllowedMethods:
+              - HEAD
+              - GET
+            CachedMethods:
+              - HEAD
+              - GET
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled
+            Compress: true
+            PathPattern: index.html
+            ResponseHeadersPolicyId: !Ref FrontendResponseHeaderPolicy
+            TargetOriginId: FrontendAssetsBucket
+            ViewerProtocolPolicy: redirect-to-https
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+          Compress: true
+          ResponseHeadersPolicyId: !Ref FrontendResponseHeaderPolicy
+          TargetOriginId: FrontendAssetsBucket
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - Id: FrontendAssetsBucket
+            DomainName: !GetAtt FrontendAssetsBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FrontendAssetsBucketOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref FrontendDomainCertificateParameterValue
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+
+  FrontendAssetsBucketPolicyCloudFrontAccess:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendAssetsBucket
+      PolicyDocument:
+        Id: CloudFrontAccess
+        Version: "2012-10-17"
+        Statement:
+          - Principal:
+              Service: !Sub cloudfront.${AWS::URLSuffix}
+            Action: s3:GetObject
+            Effect: Allow
+            Resource: !Sub ${FrontendAssetsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendCloudFrontDistribution.Id}
+
+  FrontendDNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      RecordSets:
+        - Name: app.{{resolve:ssm:/account_subdomain/domain}}
+          Type: A
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
+            DNSName: !GetAtt FrontendCloudFrontDistribution.DomainName
+        - Name: app.{{resolve:ssm:/account_subdomain/domain}}
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
+            DNSName: !GetAtt FrontendCloudFrontDistribution.DomainName

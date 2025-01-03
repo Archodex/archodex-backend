@@ -48,7 +48,26 @@
 			"group": {
 				"kind": "build",
 			},
-			"label": "act: Run GitHub Actions Workflow deploy.yml locally"
+			"label": "act: Run GitHub Actions Workflow deploy.yml locally for dev"
+		},
+		{
+			"type": "process",
+			"command": "act",
+			"args": [
+				"--var",
+				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
+				"--platform",
+				"ubuntu-latest=-self-hosted",
+				"--env",
+				"AWS_PROFILE=archodex-prod-AdministratorAccess",
+				"--job",
+				"deploy",
+			],
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+			},
+			"label": "act: Run GitHub Actions Workflow deploy.yml locally for prod"
 		}
 	]
 }
