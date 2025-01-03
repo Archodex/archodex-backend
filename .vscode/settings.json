@@ -1,20 +1,6 @@
 {
   "editor.formatOnSave": true,
   "rest-client.enableTelemetry": false,
-  "rest-client.environmentVariables": {
-    "local dev": {
-      "baseUrl": "http://localhost:5731",
-      "report_api_key": "<local dev key>",
-    },
-    "remote dev": {
-      "baseUrl": "http://localhost:5731",
-      "report_api_key": "<remote dev key>",
-    },
-    "<dev>": {
-      "baseUrl": "https://api.us-west-2.<dev>.dev.servicearch.com",
-      "report_api_key": "<remote dev key>"
-    }
-  },
   "rest-client.previewOption": "exchange",
   "rest-client.previewResponsePanelTakeFocus": false,
 }
