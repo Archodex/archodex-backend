@@ -23,19 +23,11 @@ pub(crate) struct IdpResponseQueryParams {
 struct CognitoAuthorizeResponse {
     access_token: String,
     refresh_token: String,
-    id_token: String,
 }
 
 #[derive(Deserialize)]
 struct CognitoRefreshResponse {
     access_token: String,
-    id_token: String,
-}
-
-#[derive(Deserialize)]
-struct ArchodexIdTokenClaims {
-    #[serde(rename = "custom:endpoint")]
-    endpoint: Option<String>,
 }
 
 pub(crate) async fn idp_response(
@@ -81,18 +73,16 @@ pub(crate) async fn idp_response(
     let CognitoAuthorizeResponse {
         access_token,
         refresh_token,
-        id_token,
     } = serde_json::from_str(&body)
         .with_context(|| format!("Failed to parse Cognito response as JSON: {body}"))?;
 
-    let endpoint = endpoint_from_id_token(&id_token)?;
     let access_token_exp =
         exp_from_jwt_token(&access_token).context("Failed to parse access token")?;
 
     let refresh_token_exp =
         Utc::now() + chrono::Duration::days(refresh_token_validity_in_days as i64);
 
-    info!("Decoded ID token with endpoint {endpoint:?}, access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}");
+    info!("Decoded access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}");
 
     let mut app_redirect_uri = Env::app_redirect_uri().clone();
     app_redirect_uri
@@ -103,12 +93,6 @@ pub(crate) async fn idp_response(
             &refresh_token_exp.timestamp().to_string(),
         )
         .append_pair("state", &state);
-
-    if let Some(endpoint) = endpoint {
-        app_redirect_uri
-            .query_pairs_mut()
-            .append_pair("endpoint", &endpoint);
-    }
 
     Ok((
         StatusCode::FOUND,
@@ -131,7 +115,6 @@ pub(crate) async fn idp_response(
 #[derive(Serialize)]
 struct RefreshTokenResponse {
     access_token_expiration: u64,
-    endpoint: Option<String>,
 }
 
 pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoResponse> {
@@ -179,17 +162,13 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
         "Failed to get refreshed tokens from Cognito: {status}:\n{body}",
     );
 
-    let CognitoRefreshResponse {
-        access_token,
-        id_token,
-    } = serde_json::from_str(&body)
+    let CognitoRefreshResponse { access_token } = serde_json::from_str(&body)
         .with_context(|| format!("Failed to parse Cognito response as JSON: {body}"))?;
 
-    let endpoint = endpoint_from_id_token(&id_token)?;
     let access_token_exp =
         exp_from_jwt_token(&access_token).context("Failed to parse access token")?;
 
-    info!("Decoded ID token with endpoint {endpoint:?} and access token with expiration {access_token_exp}");
+    info!("Decoded access token with expiration {access_token_exp}");
 
     Ok((
         StatusCode::OK,
@@ -199,7 +178,6 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
         )]),
         Json(RefreshTokenResponse {
             access_token_expiration: access_token_exp,
-            endpoint,
         }),
     ))
 }
@@ -266,29 +244,6 @@ async fn try_revoke_token(cookies: CookieJar) -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn endpoint_from_id_token(id_token: &str) -> anyhow::Result<Option<String>> {
-    let parts = id_token.split('.').collect::<Vec<_>>();
-    ensure!(parts.len() == 3, "Invalid ID token: {id_token:?}",);
-
-    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(parts[1].as_bytes())
-        .with_context(|| {
-            format!(
-                "Failed to decode ID token payload as URL-safe base64 (payload: {:?})",
-                parts[1]
-            )
-        })?;
-
-    let payload = std::str::from_utf8(&payload).with_context(|| {
-        format!("Failed to decode ID token payload as UTF-8 (payload: {payload:?})")
-    })?;
-
-    let ArchodexIdTokenClaims { endpoint } = serde_json::from_str(payload)
-        .with_context(|| format!("ID token has invalid 'endpoint' claim (payload: {payload:?})"))?;
-
-    Ok(endpoint)
 }
 
 #[derive(Deserialize)]
