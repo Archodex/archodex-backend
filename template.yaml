@@ -1111,15 +1111,37 @@ Resources:
       ServiceTimeout: 5
       ParameterName: !Sub /${AWS::StackName}/frontend_domain_certificate
 
-  FrontendResponseHeaderPolicy:
+  FrontendHTMLResponseHeaderPolicy:
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
       ResponseHeadersPolicyConfig:
-        Name: AddHSTSHeader
+        Name: !Sub ${AWS::StackName}-html
+        CustomHeadersConfig:
+          Items:
+            - Header: Cache-Control
+              Override: true
+              Value: no-store
         SecurityHeadersConfig:
           ContentSecurityPolicy:
             ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none';
             Override: true
+          ContentTypeOptions:
+            Override: true
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: no-referrer
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Override: true
+            Preload: true
+
+  FrontendAssetsResponseHeaderPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub ${AWS::StackName}-assets
+        SecurityHeadersConfig:
           ContentTypeOptions:
             Override: true
           ReferrerPolicy:
@@ -1147,7 +1169,7 @@ Resources:
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled
             Compress: true
             PathPattern: index.html
-            ResponseHeadersPolicyId: !Ref FrontendResponseHeaderPolicy
+            ResponseHeadersPolicyId: !Ref FrontendHTMLResponseHeaderPolicy
             TargetOriginId: FrontendAssetsBucket
             ViewerProtocolPolicy: redirect-to-https
         CustomErrorResponses:
@@ -1163,7 +1185,7 @@ Resources:
             - GET
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
           Compress: true
-          ResponseHeadersPolicyId: !Ref FrontendResponseHeaderPolicy
+          ResponseHeadersPolicyId: !Ref FrontendAssetsResponseHeaderPolicy
           TargetOriginId: FrontendAssetsBucket
           ViewerProtocolPolicy: redirect-to-https
         DefaultRootObject: index.html
