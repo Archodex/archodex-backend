@@ -1123,7 +1123,7 @@ Resources:
               Value: no-store
         SecurityHeadersConfig:
           ContentSecurityPolicy:
-            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none';
+            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; img-src 'self' https://cdn.jsdelivr.net/npm/aws-svg-icons@3.0.0-2021-07-30/ https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/ https://cdn.jsdelivr.net/npm/simple-icons@v14/; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none';
             Override: true
           ContentTypeOptions:
             Override: true
