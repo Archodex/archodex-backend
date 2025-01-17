@@ -31,7 +31,7 @@ jobs:
           - us-west-2
           - us-east-1
     steps:
-      - name: Upload Lambda API function zip package to regional backend deployment asset buckets
+      - name: Upload assets to regional backend deployment asset buckets
         run: |-
           API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -42,6 +42,10 @@ jobs:
               target/lambda/lambda/bootstrap.zip \
               "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip"
 
+          aws s3 cp --sse AES256 \
+            template.yaml \
+            "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml"
+      
   deploy:
     needs: upload
     runs-on: ubuntu-latest
@@ -52,10 +56,11 @@ jobs:
       - name: Deploy CloudFormation stack
         run: |-
           API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
           aws cloudformation create-change-set \
             --stack-name archodex-backend \
             --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S%z)" \
-            --template-body file://template.yaml \
+            --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}"
