@@ -19,7 +19,7 @@ use crate::{
     Result,
 };
 
-pub(crate) const DYNAMODB_TABLE_PREFIX: &'static str = "archodex-service-data-";
+pub(crate) const DYNAMODB_TABLE_PREFIX: &str = "archodex-service-data-";
 
 #[derive(Default)]
 pub(crate) struct BeginReadonlyStatement;
@@ -106,7 +106,7 @@ pub(crate) async fn db<A: AccountAuth>(
 
     let account = accounts_db()
         .await?
-        .query(BeginReadonlyStatement::default())
+        .query(BeginReadonlyStatement)
         .get_account_by_id(account_id.to_owned())
         .query(CommitStatement::default())
         .await?

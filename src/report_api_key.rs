@@ -101,7 +101,7 @@ impl ReportApiKey {
         Ok(format!(
             "archodex_report_api_key_{}_{}",
             self.id,
-            BASE64_STANDARD.encode(&report_api_key.encode_to_vec())
+            BASE64_STANDARD.encode(report_api_key.encode_to_vec())
         ))
     }
 
@@ -125,7 +125,7 @@ impl ReportApiKey {
             .context("Invalid report key value: Key ID is not a number")?;
 
         ensure!(
-            key_id >= 100000 && key_id <= 999999,
+            (100000..=999999).contains(&key_id),
             "Invalid report key value: Key ID is out of range"
         );
 
@@ -134,7 +134,7 @@ impl ReportApiKey {
             .context("Failed to base64 decode report key value")?;
 
         ensure!(
-            value.len() > 0,
+            !value.is_empty(),
             "Invalid report key value: Missing endpoint length"
         );
 
@@ -142,7 +142,7 @@ impl ReportApiKey {
             .context("Invalid report key value: Failed to decode report key value as protobuf")?;
 
         ensure!(
-            &value.endpoint == Env::endpoint(),
+            value.endpoint == Env::endpoint(),
             "Invalid report key value: Incorrect endpoint"
         );
 

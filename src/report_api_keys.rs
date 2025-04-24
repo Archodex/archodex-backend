@@ -66,7 +66,7 @@ pub(crate) async fn create_report_api_key(
 
     let account = accounts_db()
         .await?
-        .query(BeginReadonlyStatement::default())
+        .query(BeginReadonlyStatement)
         .get_account_by_id(account_id.to_owned())
         .query(CommitStatement::default())
         .await?

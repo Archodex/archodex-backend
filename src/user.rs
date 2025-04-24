@@ -69,7 +69,7 @@ impl From<&User> for surrealdb::sql::Thing {
     fn from(user: &User) -> surrealdb::sql::Thing {
         surrealdb::sql::Thing::from((
             "user",
-            surrealdb::sql::Id::Uuid(surrealdb::sql::Uuid::from(user.id.clone())),
+            surrealdb::sql::Id::Uuid(surrealdb::sql::Uuid::from(user.id)),
         ))
     }
 }

@@ -83,11 +83,11 @@ pub(super) struct Request {
     event_captures: Vec<EventCapture>,
 }
 
-fn upsert_resource_tree_node<'a, 'b>(
-    mut query: Query<'b, Db>,
+fn upsert_resource_tree_node<'a>(
+    mut query: Query<'a, Db>,
     prefix: &mut surrealdb::sql::Array,
     resource_tree_node: ResourceTreeNode,
-) -> Query<'b, Db> {
+) -> Query<'a, Db> {
     // INSERT INTO resource (id, first_seen_at, last_seen_at) VALUES (<id>, <first_seen_at>, <last_seen_at>) ON DUPLICATE KEY UPDATE last_seen_at = <last_seen_at> RETURN NONE
     let mut resource_upsert = InsertStatement::default();
     resource_upsert.into = Some(surrealdb::sql::Table::from("resource").into());
@@ -201,22 +201,20 @@ fn upsert_resource_tree_node<'a, 'b>(
     query.query(contains_upsert)
 }
 
-fn upsert_events<'a, 'b>(mut query: Query<'b, Db>, report: EventCapture) -> Query<'b, Db> {
+fn upsert_events(mut query: Query<'_, Db>, report: EventCapture) -> Query<'_, Db> {
     let first_seen_at = report
         .events
         .iter()
         .min_by_key(|&event| event.first_seen_at)
         .unwrap()
-        .first_seen_at
-        .clone();
+        .first_seen_at;
 
     let last_seen_at = report
         .events
         .iter()
         .max_by_key(|&event| event.last_seen_at)
         .unwrap()
-        .last_seen_at
-        .clone();
+        .last_seen_at;
 
     let principal_chain_id_var = next_binding();
     let principals_binding = next_binding();
@@ -253,7 +251,7 @@ fn upsert_events<'a, 'b>(mut query: Query<'b, Db>, report: EventCapture) -> Quer
         .bind((first_seen_at_binding, first_seen_at_value))
         .bind((last_seen_at_binding, last_seen_at_value));
 
-    let last_principal = report.principals.last().map(Principal::clone);
+    let last_principal = report.principals.last().cloned();
 
     for principal in report.principals {
         let has_direct_principal_chain_value = Some(&principal) == last_principal.as_ref();

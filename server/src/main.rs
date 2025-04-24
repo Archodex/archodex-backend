@@ -50,7 +50,7 @@ fn main() -> Result<(), std::io::Error> {
         .block_on(async {
             let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{PORT}"))
                 .await
-                .expect(&format!("Failed to listen on port {PORT}"));
+                .unwrap_or_else(|_| panic!("Failed to listen on port {PORT}"));
 
             info!("Listening on port {PORT}");
 

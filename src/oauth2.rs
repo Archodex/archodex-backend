@@ -50,8 +50,8 @@ pub(crate) async fn idp_response(
         .header("Content-Type", "application/x-www-form-urlencoded")
         .form(&[
             ("grant_type", "authorization_code"),
-            ("client_id", &client_id),
-            ("redirect_uri", &redirect_uri),
+            ("client_id", client_id),
+            ("redirect_uri", redirect_uri),
             ("code", &code),
         ])
         .send()
@@ -143,7 +143,7 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
         .header("Content-Type", "application/x-www-form-urlencoded")
         .form(&[
             ("grant_type", "refresh_token"),
-            ("client_id", &client_id),
+            ("client_id", client_id),
             ("refresh_token", refresh_token),
         ])
         .send()

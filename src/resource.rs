@@ -136,7 +136,7 @@ impl From<ResourceId> for surrealdb::sql::Array {
         surrealdb::sql::Array::from(
             value
                 .into_iter()
-                .map(|part| surrealdb::sql::Value::from(part))
+                .map(surrealdb::sql::Value::from)
                 .collect::<Vec<_>>(),
         )
     }
@@ -282,9 +282,9 @@ impl Resource {
             .expect("Failed to create query for all resources")
     }
 
-    pub(crate) fn add_resources_of_type<'a>(
-        r#type: &'a str,
-    ) -> (Vec<surrealdb::sql::Statement>, (String, &'a str)) {
+    pub(crate) fn add_resources_of_type(
+        r#type: &str,
+    ) -> (Vec<surrealdb::sql::Statement>, (String, &str)) {
         let binding = next_binding();
 
         (

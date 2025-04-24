@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::Context;
 use axum::{extract::Query, Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -40,7 +39,7 @@ impl TryFrom<surrealdb::sql::Object> for PrincipalChainIdPart {
         };
 
         let event = match value.remove("event") {
-            Some(surrealdb::sql::Value::Strand(event)) => Some(String::try_from(event).context("PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object containing an invalid `event` value")?),
+            Some(surrealdb::sql::Value::Strand(event)) => Some(String::from(event)),
             Some(surrealdb::sql::Value::None) => None,
             None => None,
             _ => bail!("PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object containing an invalid `event` value"),

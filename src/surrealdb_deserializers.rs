@@ -117,8 +117,8 @@ pub(crate) mod uuid {
             {
                 let (variant, value) = data
                     .variant::<String>()
-                    .or_else(|err| {
-                        Err(serde::de::Error::custom(format!("Failed to deserialize surrealdb::sql::Uuid: Enum variant type could not be deserialized as a `String`: {err}")))
+                    .map_err(|err| {
+                        serde::de::Error::custom(format!("Failed to deserialize surrealdb::sql::Uuid: Enum variant type could not be deserialized as a `String`: {err}"))
                     })?;
 
                 if variant != "Uuid" {
@@ -127,11 +127,11 @@ pub(crate) mod uuid {
 
                 let sql_uuid = value
                     .newtype_variant_seed::<PhantomData<surrealdb::sql::Uuid>>(PhantomData)
-                    .or_else(|_| {
-                        Err(serde::de::Error::invalid_value(
+                    .map_err(|_| {
+                        serde::de::Error::invalid_value(
                             serde::de::Unexpected::NewtypeVariant,
                             &"a surrealdb::sql::Uuid",
-                        ))
+                        )
                     })?;
 
                 Ok(sql_uuid.into())
@@ -141,11 +141,8 @@ pub(crate) mod uuid {
             where
                 E: serde::de::Error,
             {
-                Uuid::parse_str(v).or_else(|_| {
-                    Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(v),
-                        &self,
-                    ))
+                Uuid::parse_str(v).map_err(|_| {
+                    serde::de::Error::invalid_value(serde::de::Unexpected::Str(v), &self)
                 })
             }
 
@@ -157,11 +154,11 @@ pub(crate) mod uuid {
                     serde::de::value::MapAccessDeserializer::new(map),
                 )?;
                 let key_value = surrealdb::Value::from(record_id.key().clone());
-                surrealdb::value::from_value::<Uuid>(key_value).or_else(|_| {
-                    Err(serde::de::Error::invalid_value(
+                surrealdb::value::from_value::<Uuid>(key_value).map_err(|_| {
+                    serde::de::Error::invalid_value(
                         serde::de::Unexpected::Other("record ID with non-UUID key"),
                         &self,
-                    ))
+                    )
                 })
             }
         }
@@ -177,7 +174,7 @@ pub(crate) mod bytes {
     {
         struct Visitor;
 
-        impl<'de> serde::de::Visitor<'de> for Visitor {
+        impl serde::de::Visitor<'_> for Visitor {
             type Value = Vec<u8>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

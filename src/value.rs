@@ -6,11 +6,11 @@ pub(crate) fn surrealdb_value_from_json_value(value: serde_json::Value) -> surre
         serde_json::Value::Bool(value) => surrealdb::sql::Value::Bool(value),
         serde_json::Value::Number(value) => {
             let value = if let Some(value) = value.as_i64() {
-                surrealdb::sql::Number::from(value).into()
+                surrealdb::sql::Number::from(value)
             } else if let Some(value) = value.as_f64() {
-                surrealdb::sql::Number::from(value).into()
+                surrealdb::sql::Number::from(value)
             } else if let Some(value) = value.as_u64() {
-                surrealdb::sql::Number::from(value).into()
+                surrealdb::sql::Number::from(value)
             } else {
                 unreachable!("Invalid serde_json::Value::Number ({value})");
             };

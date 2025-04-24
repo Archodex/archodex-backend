@@ -50,7 +50,7 @@ async fn get_customer_data_aws_account_ids() -> anyhow::Result<Vec<String>> {
         .await
         .context("Failed to list customer data AWS accounts")?;
 
-    Ok(account_list
+    account_list
         .accounts
         .ok_or_else(|| anyhow!("Response from AWS Organizations account list missing `Accounts`"))?
         .into_iter()
@@ -59,7 +59,7 @@ async fn get_customer_data_aws_account_ids() -> anyhow::Result<Vec<String>> {
                 .id
                 .ok_or_else(|| anyhow!("Response from AWS Organizations account list missing `Id`"))
         })
-        .collect::<anyhow::Result<_>>()?)
+        .collect::<anyhow::Result<_>>()
 }
 
 async fn select_customer_data_aws_account(aws_account_ids: Vec<String>) -> anyhow::Result<String> {
@@ -179,7 +179,7 @@ async fn create_account_service_data_table(account: &Account) -> anyhow::Result<
     )
     .await;
 
-    let table_name = dynamodb_resources_table_name_for_account(&archodex_account_id.to_string());
+    let table_name = dynamodb_resources_table_name_for_account(archodex_account_id);
 
     info!("Creating DynamoDB table {table_name}...");
 
@@ -332,9 +332,9 @@ async fn create_account_service_data_table(account: &Account) -> anyhow::Result<
                 PointInTimeRecoverySpecification::builder()
                     .point_in_time_recovery_enabled(true)
                     .build()
-                    .expect(&format!(
-                        "Failed to build DynamoDB PITR specification for table {table_name}"
-                    )),
+                    .unwrap_or_else(|_| {
+                        panic!("Failed to build DynamoDB PITR specification for table {table_name}")
+                    }),
             )
             .send()
             .await
@@ -437,7 +437,7 @@ pub(crate) async fn create_account(
     accounts_db
         .query(BeginStatement::default())
         .create_account_query(&account)
-        .add_account_access_for_user(&account, &principal)
+        .add_account_access_for_user(&account, principal)
         .query(CommitStatement::default())
         .await?
         .check_first_real_error()?;

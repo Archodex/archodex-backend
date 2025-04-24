@@ -197,7 +197,7 @@ impl Env {
                 Some(client) => client.clone(),
                 None => {
                     let provider = aws_config::sts::AssumeRoleProvider::builder(
-                        &Self::aws_customer_data_account_role_arn(customer_data_aws_account_id),
+                        Self::aws_customer_data_account_role_arn(customer_data_aws_account_id),
                     )
                     .session_name(format!(
                         "create-account-{archodex_account_id}-service-data-table"
