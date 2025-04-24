@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: archodex-backend-dev
+  labels:
+    app: archodex-backend-dev
+spec:
+  containers:
+    - name: backend
+      image: rust:latest
+      imagePullPolicy: Always
+      command:
+        - /bin/sh
+        - -c
+        - "trap : TERM INT; sleep infinity & wait"
+      readinessProbe: null
+      ports:
+        - containerPort: 5731
+      resources:
+        limits:
+          cpu: "1"
+          memory: "2Gi"
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+      volumeMounts:
+        - name: archodex-backend-dev
+          mountPath: /root
+    - name: dynamodb-local
+      image: amazon/dynamodb-local:latest
+      imagePullPolicy: Always
+      ports:
+        - containerPort: 8001
+      resources:
+        limits:
+          cpu: "0.5"
+          memory: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "512Mi"
+      volumeMounts:
+        - name: dynamodb-local-data
+          mountPath: /home/dynamodblocal/data
+      command:
+        - "java"
+        - "-jar"
+        - "DynamoDBLocal.jar"
+        - "-port"
+        - "8001"
+        - "-sharedDb"
+        - "-dbPath"
+        - "/home/dynamodblocal/data"
+  volumes:
+    - name: archodex-backend-dev
+      persistentVolumeClaim:
+        claimName: archodex-backend-dev
+    - name: dynamodb-local-data
+      persistentVolumeClaim:
+        claimName: archodex-backend-dev-dynamodb-local

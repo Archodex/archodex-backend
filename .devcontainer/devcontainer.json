@@ -1,0 +1,11 @@
+// This is based off the upstream Rust devcontainer spec (See
+// https://github.com/devcontainers/images/blob/main/src/rust/.devcontainer/devcontainer.json).
+// Unfortunately, the pre-built image isn't rebuilt frequently enough to stay on
+// the latest Rust version.
+{
+	"name": "archodex-backend-dev",
+	"image": "rust:latest",
+	"postCreateCommand": ".devcontainer/init.sh",
+	"postStartCommand": ".devcontainer/init.sh",
+  "postAttachCommand": ".devcontainer/init.sh"
+}

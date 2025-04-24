@@ -32,6 +32,12 @@
 			"label": "rust: cargo lambda build"
 		},
 		{
+      "label": "Start archodex-backend-dev pod in Kubernetes cluster",
+      "type": "shell",
+      "command": "kubectl apply -f .devcontainer/k8s",
+      "problemMatcher": []
+    },
+		{
 			"type": "process",
 			"command": "act",
 			"args": [
