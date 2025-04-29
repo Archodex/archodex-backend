@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::opt::IntoQuery;
 
 use crate::{macros::*, next_binding};
 
@@ -276,26 +275,20 @@ pub(crate) struct Resource {
 }
 
 impl Resource {
-    pub(crate) fn get_all() -> Vec<surrealdb::sql::Statement> {
-        "$resources = SELECT * FROM resource WHERE id != resource:[] /*PARALLEL*/;"
-            .into_query()
-            .expect("Failed to create query for all resources")
+    pub(crate) fn get_all() -> &'static str {
+        "$resources = SELECT * FROM resource WHERE id != resource:[] PARALLEL;"
     }
 
-    pub(crate) fn add_resources_of_type(
-        r#type: &str,
-    ) -> (Vec<surrealdb::sql::Statement>, (String, &str)) {
+    pub(crate) fn add_resources_of_type(r#type: &str) -> (String, (String, &str)) {
         let binding = next_binding();
 
         (
             format!(
                 "$resources = array::concat(
                     $resources,
-                    SELECT * FROM resource WHERE resource_type = ${binding} /*PARALLEL*/
+                    SELECT * FROM resource WHERE resource_type = ${binding} PARALLEL
                 ).distinct();"
-            )
-            .into_query()
-            .expect("Failed to create query for resources of type"),
+            ),
             (binding, r#type),
         )
     }

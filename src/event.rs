@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::opt::IntoQuery;
 
 use crate::{principal_chain::PrincipalChainId, resource::ResourceId};
 
@@ -103,18 +102,14 @@ impl<'de> Deserialize<'de> for Event {
 }
 
 impl Event {
-    pub(crate) fn get_all() -> Vec<surrealdb::sql::Statement> {
-        "$events = SELECT * OMIT id FROM event /*PARALLEL*/;"
-            .into_query()
-            .expect("Failed to create query for all event relationships")
+    pub(crate) fn get_all() -> &'static str {
+        "$events = SELECT * OMIT id FROM event PARALLEL;"
     }
 
-    pub(crate) fn add_events_going_to_resources() -> Vec<surrealdb::sql::Statement> {
+    pub(crate) fn add_events_going_to_resources() -> &'static str {
         "$events = array::concat(
             $events,
-            array::flatten(SELECT VALUE <-event.* FROM $resources /*PARALLEL*/)
+            array::flatten(SELECT VALUE <-event.* FROM $resources PARALLEL)
         ).distinct();"
-            .into_query()
-            .expect("Failed to create query for all event relationships")
     }
 }
