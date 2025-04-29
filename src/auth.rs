@@ -22,7 +22,7 @@ use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
 use crate::{
-    db::QueryCheckFirstRealError,
+    db::{accounts_db, QueryCheckFirstRealError},
     env::Env,
     macros::*,
     report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
@@ -107,8 +107,34 @@ impl AccountAuth for DashboardAuth {
         self.account_id.as_ref()
     }
 
-    // No need to validate Cognito JWTs with DB queries
     async fn validate(&self, _db: &Surreal<Db>) -> Result<()> {
+        let Some(account_id) = &self.account_id else {
+            return Ok(());
+        };
+
+        let mut begin_statement = BeginStatement::default();
+        begin_statement.readonly = true;
+
+        if accounts_db()
+            .await?
+            .query(begin_statement)
+            .query("SELECT 1 FROM $user->has_access->(account WHERE record::id(id) == $account_id)")
+            .bind(("user", surrealdb::sql::Thing::from(&self.principal)))
+            .bind(("account_id", account_id.to_string()))
+            .query(CommitStatement::default())
+            .await?
+            .check_first_real_error()?
+            .take::<Option<u8>>((0, "1"))?
+            .is_none()
+        {
+            warn!(
+                principal = ?self.principal,
+                account_id = account_id,
+                "Principal does not have access to account"
+            );
+            unauthorized!();
+        }
+
         Ok(())
     }
 }
