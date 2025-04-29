@@ -48,7 +48,7 @@ code --install-extension xaver.clang-format
 if ! command -v aws &> /dev/null; then
     echo "AWS CLI not found. Installing..."
     curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
-    unzip awscliv2.zip
+    unzip -q awscliv2.zip
     ./aws/install
     rm -rf awscliv2.zip aws
     echo "AWS CLI installed successfully."
