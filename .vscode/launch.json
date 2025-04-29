@@ -30,7 +30,7 @@
         "AWS_REGION": "us-west-2",
         "AWS_ACCOUNT_ID": "${config:archodex.AWS_ACCOUNT_ID}",
         "CUSTOMER_DATA_OU_ID": "${config:archodex.CUSTOMER_DATA_OU_ID}",
-        "ENDPOINT": "http://localhost:5731",
+        "ENDPOINT": "http://archodex-backend-dev:5731",
         "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_ENV_NAME}.dev.servicearch.com",
         "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
         "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
