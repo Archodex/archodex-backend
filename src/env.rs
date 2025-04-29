@@ -159,9 +159,14 @@ impl Env {
 
         CLIENT
             .get_or_init(|| async {
-                aws_sdk_dynamodb::Client::new(
-                    &aws_config::from_env().profile_name("ddbtest").load().await,
-                )
+                let config = aws_config::from_env()
+                    .region("us-west-2")
+                    .test_credentials()
+                    .endpoint_url("http://localhost:8001")
+                    .load()
+                    .await;
+
+                aws_sdk_dynamodb::Client::new(&config)
             })
             .await
     }

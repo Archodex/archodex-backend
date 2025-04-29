@@ -57,7 +57,7 @@ pub(crate) async fn db_for_customer_data_account(
             Some(db) => db.clone(),
             None => {
                 let path = if Env::is_local_dev() {
-                    format!("{DYNAMODB_TABLE_PREFIX};profile=ddbtest")
+                    format!("{DYNAMODB_TABLE_PREFIX};local=8001")
                 } else {
                     let mut path = format!(
                         "arn:{aws_partition}:dynamodb:{aws_region}:{customer_data_aws_account_id}:table/{DYNAMODB_TABLE_PREFIX}",
@@ -130,7 +130,7 @@ pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Db>> {
     Ok(ACCOUNTS_DB
         .get_or_try_init(|| async {
             let path = if Env::is_local_dev() {
-                ";profile=ddbtest"
+                ";local=8001"
             } else {
                 ""
             };
