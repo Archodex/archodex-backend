@@ -8,6 +8,23 @@ apt-get install -y clang jq protobuf-compiler
 
 rustup component add clippy rustfmt
 
+# Install zig
+pushd "$HOME"
+curl -LO https://ziglang.org/builds/zig-linux-aarch64-0.15.0-dev.386+2e35fdd03.tar.xz
+tar -xf zig-linux-aarch64-*.tar.xz
+rm zig-linux-aarch64-*.tar.xz
+mv zig-* zig
+popd
+
+# Install cargo-lambda
+export PATH="${PATH}:${HOME}/zig"
+curl -fsSL https://cargo-lambda.info/install.sh | sh
+
+# Install act
+pushd "$HOME"
+curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/nektos/act/master/install.sh | bash
+popd
+
 # Install latest mold, debian bookworm is very out of date
 # Check if mold is already installed
 if ! command -v mold &> /dev/null; then

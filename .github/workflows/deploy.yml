@@ -54,13 +54,15 @@ jobs:
         working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
     steps:
       - name: Deploy CloudFormation stack
+        env:
+          AWS_PAGER: ""
         run: |-
           API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
           aws cloudformation create-change-set \
             --stack-name archodex-backend \
-            --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S%z)" \
+            --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S)" \
             --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}"
