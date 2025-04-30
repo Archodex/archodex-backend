@@ -118,16 +118,33 @@ impl Env {
         &Self::get().cognito_auth_endpoint
     }
 
-    pub(crate) fn cognito_redirect_uri() -> &'static str {
-        Self::get().cognito_redirect_uri.as_str()
+    pub(crate) fn cognito_redirect_uri(is_local_dev: bool) -> &'static str {
+        if is_local_dev {
+            static LOCAL_DEV_REDIRECT_URI: LazyLock<String> = LazyLock::new(||
+                format!("{}/local", Env::get().cognito_redirect_uri)
+            );
+            
+            &LOCAL_DEV_REDIRECT_URI
+        } else {
+            Self::get().cognito_redirect_uri.as_str()
+        }
     }
 
     pub(crate) fn cognito_refresh_token_validity_in_days() -> u16 {
         Self::get().cognito_refresh_token_validity_in_days
     }
 
-    pub(crate) fn app_redirect_uri() -> &'static Url {
-        &Self::get().app_redirect_uri
+    pub(crate) fn app_redirect_uri(is_local_dev: bool) -> &'static Url {
+        if is_local_dev {
+            static LOCAL_DEV_URL: LazyLock<Url> = LazyLock::new(|| {
+                Url::parse("http://localhost:5173/oauth2/idpresponse")
+                    .expect("Invalid local development URL")
+            });
+
+            &LOCAL_DEV_URL
+        } else {
+            &Self::get().app_redirect_uri
+        }
     }
 
     async fn aws_config() -> &'static aws_config::SdkConfig {

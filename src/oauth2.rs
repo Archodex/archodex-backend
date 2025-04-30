@@ -30,8 +30,10 @@ struct CognitoRefreshResponse {
     access_token: String,
 }
 
-pub(crate) async fn idp_response(
-    Query(IdpResponseQueryParams { code, state }): Query<IdpResponseQueryParams>,
+async fn idp_response(
+    code: String,
+    state: String,
+    is_local_dev: bool,
 ) -> Result<impl IntoResponse> {
     let client = reqwest::Client::new();
 
@@ -40,7 +42,7 @@ pub(crate) async fn idp_response(
     cognito_token_endpoint.set_path("/oauth2/token");
 
     let client_id = Env::cognito_client_id();
-    let redirect_uri = Env::cognito_redirect_uri();
+    let redirect_uri = Env::cognito_redirect_uri(is_local_dev);
     let refresh_token_validity_in_days = Env::cognito_refresh_token_validity_in_days();
 
     debug!("Making request to {cognito_token_endpoint} for tokens...");
@@ -84,7 +86,7 @@ pub(crate) async fn idp_response(
 
     info!("Decoded access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}");
 
-    let mut app_redirect_uri = Env::app_redirect_uri().clone();
+    let mut app_redirect_uri = Env::app_redirect_uri(is_local_dev).clone();
     app_redirect_uri
         .query_pairs_mut()
         .append_pair("access_token_expiration", &access_token_exp.to_string())
@@ -110,6 +112,18 @@ pub(crate) async fn idp_response(
             (header::LOCATION, app_redirect_uri.to_string()),
         ]),
     ))
+}
+
+pub(crate) async fn idp_response_remote(
+    Query(IdpResponseQueryParams { code, state }): Query<IdpResponseQueryParams>,
+) -> Result<impl IntoResponse> {
+    idp_response(code, state, false).await
+}
+
+pub(crate) async fn idp_response_local(
+    Query(IdpResponseQueryParams { code, state }): Query<IdpResponseQueryParams>,
+) -> Result<impl IntoResponse> {
+    idp_response(code, state, true).await
 }
 
 #[derive(Serialize)]

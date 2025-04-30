@@ -28,7 +28,8 @@ pub fn router() -> Router {
         .route("/oauth2/token", post(oauth2::refresh_token))
         .route("/oauth2/revoke", post(oauth2::revoke_token))
         .layer(cors_layer.clone())
-        .route("/oauth2/idpresponse", get(oauth2::idp_response))
+        .route("/oauth2/idpresponse", get(oauth2::idp_response_remote))
+        .route("/oauth2/idpresponse/local", get(oauth2::idp_response_local))
         .route("/health", get(|| async { "Ok" }));
 
     let dashboard_authed_router = Router::new()
