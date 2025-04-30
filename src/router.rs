@@ -25,7 +25,8 @@ pub fn router() -> Router {
         .allow_credentials(AllowCredentials::yes());
 
     let unauthed_router = Router::new()
-        .route("/oauth2/token", post(oauth2::refresh_token))
+        .route("/oauth2/token", post(oauth2::refresh_token_remote))
+        .route("/oauth2/token/local", post(oauth2::refresh_token_local))
         .route("/oauth2/revoke", post(oauth2::revoke_token))
         .layer(cors_layer.clone())
         .route("/oauth2/idpresponse", get(oauth2::idp_response_remote))

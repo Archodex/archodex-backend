@@ -96,17 +96,19 @@ async fn idp_response(
         )
         .append_pair("state", &state);
 
+    let same_site = if is_local_dev { "None" } else { "Strict" };
+
     Ok((
         StatusCode::FOUND,
         AppendHeaders([
             (
                 header::SET_COOKIE,
-                format!("accessToken={access_token}; HttpOnly; Path=/; SameSite=Strict; Secure"),
+                format!("accessToken={access_token}; HttpOnly; Path=/; SameSite={same_site}; Secure"),
             ),
             (
                 header::SET_COOKIE,
                 format!(
-                    "refreshToken={refresh_token}; HttpOnly; Path=/oauth2; SameSite=Strict; Secure"
+                    "refreshToken={refresh_token}; HttpOnly; Path=/oauth2; SameSite={same_site}; Secure"
                 ),
             ),
             (header::LOCATION, app_redirect_uri.to_string()),
@@ -131,7 +133,7 @@ struct RefreshTokenResponse {
     access_token_expiration: u64,
 }
 
-pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoResponse> {
+async fn refresh_token(cookies: CookieJar, is_local_dev: bool) -> Result<impl IntoResponse> {
     let refresh_token = cookies
         .get("refreshToken")
         .ok_or_else(|| {
@@ -184,16 +186,26 @@ pub(crate) async fn refresh_token(cookies: CookieJar) -> Result<impl IntoRespons
 
     info!("Decoded access token with expiration {access_token_exp}");
 
+    let same_site = if is_local_dev { "None" } else { "Strict" };
+
     Ok((
         StatusCode::OK,
         AppendHeaders([(
             header::SET_COOKIE,
-            format!("accessToken={access_token}; HttpOnly; Path=/; SameSite=Strict; Secure"),
+            format!("accessToken={access_token}; HttpOnly; Path=/; SameSite={same_site}; Secure"),
         )]),
         Json(RefreshTokenResponse {
             access_token_expiration: access_token_exp,
         }),
     ))
+}
+
+pub(crate) async fn refresh_token_remote(cookies: CookieJar) -> Result<impl IntoResponse> {
+    refresh_token(cookies, false).await
+}
+
+pub(crate) async fn refresh_token_local(cookies: CookieJar) -> Result<impl IntoResponse> {
+    refresh_token(cookies, true).await
 }
 
 pub(crate) async fn revoke_token(cookies: CookieJar) -> impl IntoResponse {
