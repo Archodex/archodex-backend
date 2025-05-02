@@ -112,4 +112,11 @@ impl Event {
             array::flatten(SELECT VALUE <-event.* FROM $resources PARALLEL)
         ).distinct();"
     }
+
+    pub(crate) fn add_events_going_from_resources() -> &'static str {
+        "$events = array::concat(
+            $events,
+            array::flatten(SELECT VALUE ->event.* FROM $resources PARALLEL)
+        ).distinct();"
+    }
 }

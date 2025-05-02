@@ -51,13 +51,18 @@ pub(super) async fn query(
             .query(FINISH),
 
         QueryType::Secrets => {
-            let (resources_statement, resources_binding) =
-                Resource::add_resources_of_type("Secret");
+            let (secrets_statement, secrets_binding) = Resource::add_resources_of_type("Secret");
+
+            let (secret_values_statement, secret_values_binding) =
+                Resource::add_resources_of_type("Secret Value");
 
             db.query(BEGIN)
-                .query(resources_statement)
-                .bind(resources_binding)
+                .query(secrets_statement)
+                .bind(secrets_binding)
+                .query(secret_values_statement)
+                .bind(secret_values_binding)
                 .query(Event::add_events_going_to_resources())
+                .query(Event::add_events_going_from_resources())
                 .query(FINISH)
         }
     };
