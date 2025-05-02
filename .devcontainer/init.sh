@@ -10,10 +10,16 @@ rustup component add clippy rustfmt
 
 # Install zig
 pushd "$HOME"
-curl -LO https://ziglang.org/builds/zig-linux-aarch64-0.15.0-dev.386+2e35fdd03.tar.xz
-tar -xf zig-linux-aarch64-*.tar.xz
-rm zig-linux-aarch64-*.tar.xz
-mv zig-* zig
+if [ ! -d "$HOME/zig" ]; then
+    echo "Installing Zig..."
+    curl -LO https://ziglang.org/builds/zig-linux-aarch64-0.15.0-dev.386+2e35fdd03.tar.xz
+    tar -xf zig-linux-aarch64-*.tar.xz
+    rm zig-linux-aarch64-*.tar.xz
+    mv zig-* zig
+    echo "Zig installed successfully."
+else
+    echo "Zig is already installed at $HOME/zig"
+fi
 popd
 
 # Install cargo-lambda
