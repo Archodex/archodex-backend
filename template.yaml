@@ -1123,6 +1123,7 @@ Resources:
                     acm:DomainNames:
                       - app.{{resolve:ssm:/account_subdomain/domain}}
                       - auth.{{resolve:ssm:/account_subdomain/domain}}
+                      - play.{{resolve:ssm:/account_subdomain/domain}}
         - PolicyName: ManageACMRoute53Records
           PolicyDocument:
             Version: "2012-10-17"
@@ -1136,6 +1137,7 @@ Resources:
                     route53:ResourceRecordSet:
                       - "*.app.{{resolve:ssm:/account_subdomain/domain}}"
                       - "*.auth.{{resolve:ssm:/account_subdomain/domain}}"
+                      - "*.play.{{resolve:ssm:/account_subdomain/domain}}"
                   ForAllValues:StringEquals:
                     route53:ResourceRecordSetType: CNAME
 
@@ -1249,6 +1251,27 @@ Resources:
               Name: !Sub /${ParentStackName}/frontend_domain_certificate
               Type: String
               Value: !Ref FrontendDomainCertificate
+
+          PlaygroundDomainCertificate:
+            Type: AWS::CertificateManager::Certificate
+            Properties:
+              DomainName: !Sub play.${Domain}
+              ValidationMethod: DNS
+              DomainValidationOptions:
+                - DomainName: !Sub play.${Domain}
+                  HostedZoneId: !Ref HostedZoneId
+
+          PlaygroundDomainCertificateParameter:
+            Type: Custom::CrossRegionSSMParameter
+            Properties:
+              # Use unicode character escape to prevent parent stack dynamic referencing
+              ServiceToken: "{\u007Bresolve:ssm:/cross_region_parameter_custom_resource_service_token}}"
+              ServiceTimeout: 10
+              Region: !Ref ParentStackRegion
+              Description: Archodex Playground Domain us-east-1 ACM Certificate ARN
+              Name: !Sub /${ParentStackName}/playground_domain_certificate
+              Type: String
+              Value: !Ref PlaygroundDomainCertificate
 
   CognitoDomainCertificateParameterValue:
     DependsOn: CrossRegionArchodexEnvironmentStacks
@@ -2109,6 +2132,82 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendCloudFrontDistribution.Id}
 
+  PlaygroundDomainCertificateParameterValue:
+    DependsOn: CrossRegionArchodexEnvironmentStacks
+    Type: Custom::ParameterValue
+    Properties:
+      ServiceToken: "{{resolve:ssm:/parameter_value_custom_resource_service_token}}"
+      ServiceTimeout: 5
+      ParameterName: !Sub /${AWS::StackName}/playground_domain_certificate
+
+  PlaygroundCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - play.{{resolve:ssm:/account_subdomain/domain}}
+        CacheBehaviors:
+          - AllowedMethods:
+              - HEAD
+              - GET
+            CachedMethods:
+              - HEAD
+              - GET
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled
+            Compress: true
+            PathPattern: index.html
+            ResponseHeadersPolicyId: !Ref FrontendHTMLResponseHeaderPolicy
+            TargetOriginId: FrontendAssetsBucket
+            ViewerProtocolPolicy: redirect-to-https
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+          Compress: true
+          ResponseHeadersPolicyId: !Ref FrontendAssetsResponseHeaderPolicy
+          TargetOriginId: FrontendAssetsBucket
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - Id: FrontendAssetsBucket
+            DomainName: !GetAtt FrontendAssetsBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FrontendAssetsBucketOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref PlaygroundDomainCertificateParameterValue
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+
+  PlaygroundAssetsBucketPolicyCloudFrontAccess:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendAssetsBucket
+      PolicyDocument:
+        Id: CloudFrontAccess
+        Version: "2012-10-17"
+        Statement:
+          - Principal:
+              Service: !Sub cloudfront.${AWS::URLSuffix}
+            Action: s3:GetObject
+            Effect: Allow
+            Resource: !Sub ${FrontendAssetsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${PlaygroundCloudFrontDistribution.Id}
+
   FrontendDNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -2124,3 +2223,13 @@ Resources:
           AliasTarget:
             HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
             DNSName: !GetAtt FrontendCloudFrontDistribution.DomainName
+        - Name: play.{{resolve:ssm:/account_subdomain/domain}}
+          Type: A
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
+            DNSName: !GetAtt PlaygroundCloudFrontDistribution.DomainName
+        - Name: play.{{resolve:ssm:/account_subdomain/domain}}
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
+            DNSName: !GetAtt PlaygroundCloudFrontDistribution.DomainName
