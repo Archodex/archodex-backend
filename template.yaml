@@ -2115,23 +2115,6 @@ Resources:
           MinimumProtocolVersion: TLSv1.2_2021
           SslSupportMethod: sni-only
 
-  FrontendAssetsBucketPolicyCloudFrontAccess:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendAssetsBucket
-      PolicyDocument:
-        Id: CloudFrontAccess
-        Version: "2012-10-17"
-        Statement:
-          - Principal:
-              Service: !Sub cloudfront.${AWS::URLSuffix}
-            Action: s3:GetObject
-            Effect: Allow
-            Resource: !Sub ${FrontendAssetsBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendCloudFrontDistribution.Id}
-
   PlaygroundDomainCertificateParameterValue:
     DependsOn: CrossRegionArchodexEnvironmentStacks
     Type: Custom::ParameterValue
@@ -2191,7 +2174,7 @@ Resources:
           MinimumProtocolVersion: TLSv1.2_2021
           SslSupportMethod: sni-only
 
-  PlaygroundAssetsBucketPolicyCloudFrontAccess:
+  FrontendAssetsBucketPolicyCloudFrontAccess:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref FrontendAssetsBucket
@@ -2206,7 +2189,9 @@ Resources:
             Resource: !Sub ${FrontendAssetsBucket.Arn}/*
             Condition:
               StringEquals:
-                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${PlaygroundCloudFrontDistribution.Id}
+                AWS:SourceArn:
+                  - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendCloudFrontDistribution.Id}
+                  - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${PlaygroundCloudFrontDistribution.Id}
 
   FrontendDNSRecord:
     Type: AWS::Route53::RecordSetGroup
