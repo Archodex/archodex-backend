@@ -2052,6 +2052,9 @@ Resources:
             - Header: X-Robots-Tag
               Override: true
               Value: none, noimageindex
+            - Header: Cache-Control
+              Override: true
+              Value: public, max-age=31536000, immutable
         SecurityHeadersConfig:
           ContentTypeOptions:
             Override: true
