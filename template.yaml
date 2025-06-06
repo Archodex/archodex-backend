@@ -2029,8 +2029,25 @@ Resources:
               Value: none, noimageindex
         SecurityHeadersConfig:
           ContentSecurityPolicy:
-            # The style-src sha is for a radix-ui static stylesheet it embeds for scrollbar treatments in its Dialog component
-            ContentSecurityPolicy: default-src 'self'; connect-src https://*.{{resolve:ssm:/account_subdomain/domain}}; img-src 'self' https://cdn.jsdelivr.net/npm/aws-svg-icons@3.0.0-2021-07-30/ https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/ https://cdn.jsdelivr.net/npm/simple-icons@v14/; style-src 'self' 'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none';
+            # The style-src sha is for:
+            # * A radix-ui static stylesheet for scrollbar treatments in its Dialog component (nzTgYz)
+            # * A react-resizable-panels static stylesheet for cursor styles (47DEQpj)
+            ContentSecurityPolicy: >2-
+              default-src 'self';
+              connect-src https://*.{{resolve:ssm:/account_subdomain/domain}};
+              img-src
+              'self'
+              https://cdn.jsdelivr.net/npm/aws-svg-icons@3.0.0-2021-07-30/
+              https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/
+              https://cdn.jsdelivr.net/npm/simple-icons@v14/;
+              style-src
+              'self'
+              'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='
+              'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=';
+              object-src 'none';
+              base-uri 'none';
+              frame-ancestors 'none';
+              form-action 'none';
             Override: true
           ContentTypeOptions:
             Override: true
