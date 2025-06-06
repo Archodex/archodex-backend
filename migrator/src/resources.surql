@@ -80,7 +80,7 @@ DEFINE FUNCTION IF NOT EXISTS fn::fetch_global_containers($resources: set<record
     // containers that are the root resource (resource:[])
     $root_containers = (SELECT <-contains<-resource AS id, id AS contains FROM $resource_roots /*PARALLEL*/)
         .map(|$record| { id: $record.id[0], contains: $record.contains })
-        .filter(|$root_container| record::id($root_container.id) != []);
+        .filter(|$root_container| $root_container.id != NONE && record::id($root_container.id) != []);
 
     RETURN if !array::is_empty($root_containers) {
         array::concat(
