@@ -159,46 +159,9 @@ fn upsert_resource_tree_node<'a>(
         }
     }
 
-    let mut contains_upsert = InsertStatement::default();
-
-    contains_upsert.relation = true;
-
-    contains_upsert.into = Some(surrealdb::sql::Table::from("contains").into());
-
-    let out = prefix.clone();
     prefix.pop();
-    let r#in = prefix.clone();
 
-    contains_upsert.data = surrealdb::sql::Data::ValuesExpression(vec![vec![
-        (
-            "in".into(),
-            surrealdb::sql::Thing::from(("resource", surrealdb::sql::Id::from(r#in))).into(),
-        ),
-        (
-            "out".into(),
-            surrealdb::sql::Thing::from(("resource", surrealdb::sql::Id::from(out))).into(),
-        ),
-        (
-            "first_seen_at".into(),
-            resource_tree_node.first_seen_at.into(),
-        ),
-        (
-            "last_seen_at".into(),
-            resource_tree_node.last_seen_at.into(),
-        ),
-    ]]);
-
-    contains_upsert.update = Some(surrealdb::sql::Data::UpdateExpression(vec![(
-        "last_seen_at".into(),
-        surrealdb::sql::Operator::Equal,
-        resource_tree_node.last_seen_at.into(),
-    )]));
-
-    contains_upsert.output = Some(surrealdb::sql::Output::None);
-
-    info!("Contains upsert: {contains_upsert}");
-
-    query.query(contains_upsert)
+    query
 }
 
 fn upsert_events(mut query: Query<'_, Db>, report: EventCapture) -> Query<'_, Db> {
