@@ -15,6 +15,7 @@ DEFINE FIELD IF NOT EXISTS id ON TABLE resource TYPE array<array<string, 2>> REA
 DEFINE FIELD IF NOT EXISTS resource_type ON TABLE resource TYPE string READONLY DEFAULT array::last(record::id($this.id))[0];
 DEFINE INDEX IF NOT EXISTS resource_type ON TABLE resource FIELDS resource_type;
 DEFINE FIELD IF NOT EXISTS resource_id ON TABLE resource TYPE string READONLY DEFAULT array::last(record::id($this.id))[1];
+DEFINE FIELD IF NOT EXISTS environments ON TABLE resource TYPE set<string> DEFAULT ALWAYS [];
 DEFINE FIELD IF NOT EXISTS first_seen_at ON TABLE resource TYPE datetime READONLY;
 DEFINE FIELD IF NOT EXISTS last_seen_at ON TABLE resource TYPE datetime;
 DEFINE FIELD IF NOT EXISTS attributes ON TABLE resource FLEXIBLE TYPE object DEFAULT {};

@@ -1,5 +1,9 @@
+use std::collections::HashSet;
+
+use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use surrealdb::{engine::local::Db, Surreal};
 
 use crate::{macros::*, next_binding};
 
@@ -268,6 +272,8 @@ impl<'de> Deserialize<'de> for ResourceId {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Resource {
     pub(crate) id: ResourceId,
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub(crate) environments: HashSet<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) first_seen_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -292,4 +298,29 @@ impl Resource {
             (binding, r#type),
         )
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SetTagsRequest {
+    resource_id: ResourceId,
+    environments: HashSet<String>,
+}
+
+pub(super) async fn set_environments(
+    Extension(db): Extension<Surreal<Db>>,
+    Json(req): Json<SetTagsRequest>,
+) -> crate::Result<()> {
+    const QUERY: &str =
+        "BEGIN; UPDATE resource SET environments = $envs WHERE id = $resource_id; COMMIT;";
+
+    db.query(QUERY)
+        .bind(("envs", req.environments))
+        .bind((
+            "resource_id",
+            surrealdb_thing_from_resource_id(req.resource_id),
+        ))
+        .await?;
+
+    Ok(())
 }

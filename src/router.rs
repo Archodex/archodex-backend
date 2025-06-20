@@ -10,7 +10,7 @@ use crate::{
     accounts,
     auth::{dashboard_auth, report_api_key_auth, DashboardAuth, ReportApiKeyAuth},
     db::db,
-    oauth2, principal_chain, query, report, report_api_keys,
+    oauth2, principal_chain, query, report, report_api_keys, resource,
 };
 
 pub fn router() -> Router {
@@ -37,6 +37,10 @@ pub fn router() -> Router {
         .nest(
             "/account/:account_id",
             Router::new()
+                .route(
+                    "/resource/set_environments",
+                    post(resource::set_environments),
+                )
                 .route("/query/:type", get(query::query))
                 .route("/principal_chain", get(principal_chain::get))
                 .route(
