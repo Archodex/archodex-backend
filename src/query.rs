@@ -27,7 +27,8 @@ pub(super) async fn query(
     Path((_account_id, r#type)): Path<(String, QueryType)>,
     Extension(db): Extension<Surreal<Db>>,
 ) -> Result<Json<QueryResponse>> {
-    const BEGIN: &str = "BEGIN READONLY; $resources = []; $events = [];";
+    const BEGIN: &str =
+        "BEGIN READONLY; LET $resources: set<object> = []; LET $events: set<object> = [];";
 
     const FINISH: &str = "{
         resources: $resources,
@@ -51,19 +52,9 @@ pub(super) async fn query(
             .query(FINISH),
 
         QueryType::Secrets => {
-            let (secrets_statement, secrets_binding) = Resource::add_resources_of_type("Secret");
+            const SECRETS_QUERY: &str = include_str!("query_secrets.surql");
 
-            let (secret_values_statement, secret_values_binding) =
-                Resource::add_resources_of_type("Secret Value");
-
-            db.query(BEGIN)
-                .query(secrets_statement)
-                .bind(secrets_binding)
-                .query(secret_values_statement)
-                .bind(secret_values_binding)
-                .query(Event::add_events_going_to_resources())
-                .query(Event::add_events_going_from_resources())
-                .query(FINISH)
+            db.query(BEGIN).query(SECRETS_QUERY).query(FINISH)
         }
     };
 
