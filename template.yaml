@@ -2239,3 +2239,40 @@ Resources:
           AliasTarget:
             HostedZoneId: Z2FDTNDATAQYW2 # Special CloudFront-specific ID
             DNSName: !GetAtt PlaygroundCloudFrontDistribution.DomainName
+
+  FrontendDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ArchodexFrontendDeploymentRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: !Sub sts.${AWS::URLSuffix}
+              StringLike:
+                token.actions.githubusercontent.com:sub: repo:{{resolve:ssm:/github_repository_owner}}/archodex-frontend:ref:*
+      Policies:
+        - PolicyName: BuildAndDeploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:ListUserPools
+                  - cognito-idp:ListUserPoolClients
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt FrontendAssetsBucket.Arn
+                  - !Sub ${FrontendAssetsBucket.Arn}/*
