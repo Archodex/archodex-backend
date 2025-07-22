@@ -41,23 +41,8 @@
       "problemMatcher": []
     },
 		{
-			"type": "process",
-			"command": "act",
-			"args": [
-				"--var",
-				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
-				"--platform",
-				"ubuntu-latest=-self-hosted",
-				"--env",
-				"AWS_PROFILE=archodex-dev-AdministratorAccess",
-				"--job",
-				"deploy",
-			],
-			"options": {
-				"env": {
-					"PATH": "${env:PATH}:${env:HOME}/bin:${env:HOME}/zig",
-				},
-			},
+			"type": "shell",
+			"command": "eval $(aws configure export-credentials --profile archodex-dev-AdministratorAccess --format env) && GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --env AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN --env AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION --env GITHUB_TOKEN=$GITHUB_TOKEN --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --job deploy",
 			"problemMatcher": [],
 			"group": {
 				"kind": "build",
@@ -72,8 +57,12 @@
 				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
 				"--platform",
 				"ubuntu-latest=-self-hosted",
+				"--container-architecture",
+				"linux/arm64",
 				"--env",
 				"AWS_PROFILE=archodex-prod-AdministratorAccess",
+				"--env",
+				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
 				"--job",
 				"deploy",
 			],

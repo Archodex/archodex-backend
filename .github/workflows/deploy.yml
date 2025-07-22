@@ -1,39 +1,90 @@
 name: Deploy
 
-on: workflow_dispatch
-#  push:
-#    branches:
-#      - main
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+env:
+  AWS_PAGER: ""
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
+    runs-on: ubuntu-latest-arm64
+    outputs:
+      api-bootstrap-md5sum: ${{ steps.calculate-md5.outputs.md5sum }}
     steps:
       - name: Checkout code
-        if: ${{ !env.ACT }}
+        if: env.ACT != 'true'
         uses: actions/checkout@v4
 
-      - name: Build with Cargo
-        run: cargo lambda build --release --arm64 --package lambda --output-format zip
+      - name: Configure Git for private repositories
+        if: env.ACT == 'true'
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install development packages
+        run: |-
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        if: env.ACT != 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Cargo Lambda
+        uses: jaxxstorm/action-install-gh-release@v1
+        with:
+          repo: cargo-lambda/cargo-lambda
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Build with Cargo Lambda
+        run: |-
+          cargo lambda build --release --arm64 --package lambda --output-format zip
+
+      - name: Calculate MD5 sum
+        id: calculate-md5
+        run: |-
+          MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          echo "md5sum=$MD5SUM" >> $GITHUB_OUTPUT
 
   upload:
     needs: build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
     strategy:
       matrix:
         region:
           - us-west-2
           - us-east-1
     steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+          mask-aws-account-id: true
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
+        run: |-
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
       - name: Upload assets to regional backend deployment asset buckets
         run: |-
-          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          API_BOOTSTRAP_MD5SUM="${{ needs.build.outputs.api-bootstrap-md5sum }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
           aws s3 ls "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip" > /dev/null && \
@@ -45,24 +96,99 @@ jobs:
           aws s3 cp --sse AES256 \
             template.yaml \
             "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml"
-      
+
   deploy:
-    needs: upload
+    needs: [build, upload]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
     steps:
-      - name: Deploy CloudFormation stack
-        env:
-          AWS_PAGER: ""
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
         run: |-
-          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
+      - name: Deploy CloudFormation stack
+        run: |-
+          API_BOOTSTRAP_MD5SUM="${{ needs.build.outputs.api-bootstrap-md5sum }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          aws cloudformation create-change-set \
-            --stack-name archodex-backend \
-            --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S)" \
-            --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}"
+          echo "Starting CloudFormation deployment..."
+
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name archodex-backend >/dev/null 2>&1; then
+            echo "Stack exists, updating..."
+            aws cloudformation update-stack \
+              --stack-name archodex-backend \
+              --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}" \
+              --disable-rollback
+          else
+            echo "Stack does not exist, creating..."
+            aws cloudformation create-stack \
+              --stack-name archodex-backend \
+              --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}" \
+              --disable-rollback
+          fi
+
+          echo "Deployment command completed. Monitoring stack status..."
+
+          # Monitor stack status and events
+          LAST_EVENT_TIME=$(date -u -d '1 minute ago' '+%Y-%m-%dT%H:%M:%S')
+
+          while true; do
+            # Get current stack status
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name archodex-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
+            
+            echo "Current stack status: $STACK_STATUS"
+            
+            # Show recent events
+            aws cloudformation describe-stack-events \
+              --stack-name archodex-backend \
+              --query "StackEvents[?Timestamp>=\`${LAST_EVENT_TIME}\`].{Time:Timestamp,Resource:LogicalResourceId,Type:ResourceType,Status:ResourceStatus,Reason:ResourceStatusReason}" \
+              --output table 2>/dev/null || true
+            
+            # Check if deployment is complete
+            case $STACK_STATUS in
+              CREATE_COMPLETE|UPDATE_COMPLETE)
+                echo "✅ CloudFormation deployment completed successfully!"
+                aws cloudformation describe-stacks --stack-name archodex-backend --query 'Stacks[0].{Status:StackStatus,LastUpdated:LastUpdatedTime}' --output table
+                break
+                ;;
+              CREATE_FAILED|UPDATE_FAILED|UPDATE_ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|DELETE_FAILED)
+                echo "❌ CloudFormation deployment failed with status: $STACK_STATUS"
+                aws cloudformation describe-stack-events \
+                  --stack-name archodex-backend \
+                  --query "StackEvents[?ResourceStatus=='CREATE_FAILED' || ResourceStatus=='UPDATE_FAILED' || ResourceStatus=='DELETE_FAILED'].{Time:Timestamp,Resource:LogicalResourceId,Status:ResourceStatus,Reason:ResourceStatusReason}" \
+                  --output table
+                exit 1
+                ;;
+              CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)
+                echo "Deployment in progress, waiting..."
+                ;;
+              STACK_NOT_FOUND)
+                echo "❌ Stack not found!"
+                exit 1
+                ;;
+              *)
+                echo "Unknown stack status: $STACK_STATUS"
+                ;;
+            esac
+            
+            # Update last event time and wait
+            LAST_EVENT_TIME=$(date -u '+%Y-%m-%dT%H:%M:%S')
+            sleep 5
+          done
