@@ -50,7 +50,7 @@ tower-http = { version = "0.5.2", default-features = false, features = ["cors", 
 tracing.workspace = true
 
 [patch.crates-io]
-surrealdb = { git = "https://github.com/txase/surrealdb.git" }
+surrealdb = { git = "https://github.com/Archodex/surrealdb.git" }
 
 [build-dependencies]
 prost-build = "0.13.4"
