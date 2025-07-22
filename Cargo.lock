@@ -4448,7 +4448,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "surrealdb"
 version = "2.3.0"
-source = "git+https://github.com/txase/surrealdb.git#b1a3a650248f017f38936bcac850b22e7770a35e"
+source = "git+https://github.com/Archodex/surrealdb.git#38968c9be189c78ebf06a1d99e793f4b0e240989"
 dependencies = [
  "arrayvec",
  "async-channel",
@@ -4491,7 +4491,7 @@ dependencies = [
 [[package]]
 name = "surrealdb-core"
 version = "2.3.0"
-source = "git+https://github.com/txase/surrealdb.git#b1a3a650248f017f38936bcac850b22e7770a35e"
+source = "git+https://github.com/Archodex/surrealdb.git#38968c9be189c78ebf06a1d99e793f4b0e240989"
 dependencies = [
  "addr",
  "ahash 0.8.11",
