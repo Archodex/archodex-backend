@@ -1,0 +1,5 @@
+# Default volume mounts for cargo cache persistence
+--container-options -v ~/.cargo/registry:/usr/local/cargo/registry
+--container-options -v ~/.cargo/git:/usr/local/cargo/git
+# Use separate target directory for container builds to avoid conflicts
+--container-options -v ./.act-cargo-target:/workspace/target
