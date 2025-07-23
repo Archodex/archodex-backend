@@ -42,7 +42,13 @@
     },
 		{
 			"type": "shell",
-			"command": "eval $(aws configure export-credentials --profile archodex-dev-AdministratorAccess --format env) && GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --env AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN --env AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION --env GITHUB_TOKEN=$GITHUB_TOKEN --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --job deploy",
+			"command": "GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --var DEPLOY_REGIONS=${config:archodex.DEV_REGIONS} --var ARCHODEX_ENV_NAME=${config:archodex.ARCHODEX_ENV_NAME} --env-file <(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)  --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --job deploy",
+			"options": {
+				"shell": {
+					"executable": "/bin/bash",
+					"args": ["-c"]
+				}
+			},
 			"problemMatcher": [],
 			"group": {
 				"kind": "build",
@@ -50,9 +56,10 @@
 			"label": "act: Run GitHub Actions Workflow deploy.yml locally for dev"
 		},
 		{
-			"type": "process",
+			"type": "shell",
 			"command": "act",
 			"args": [
+				"workflow_dispatch",
 				"--var",
 				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
 				"--platform",
@@ -63,8 +70,10 @@
 				"AWS_PROFILE=archodex-prod-AdministratorAccess",
 				"--env",
 				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
+				"--var",
+				"DEPLOY_REGIONS=${input:PROD_REGIONS}",
 				"--job",
-				"deploy",
+				"deploy"
 			],
 			"options": {
 				"env": {
@@ -76,6 +85,39 @@
 				"kind": "build",
 			},
 			"label": "act: Run GitHub Actions Workflow deploy.yml locally for prod"
+		},
+		{
+			"type": "shell",
+			"command": "act",
+			"args": [
+				"workflow_dispatch",
+				"--env-file",
+				"<(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)",
+				"--var",
+				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
+				"--platform",
+				"ubuntu-latest=-self-hosted",
+				"--container-architecture",
+				"linux/amd64",
+				"--var",
+				"DEPLOY_REGIONS=${input:DEV_REGIONS}",
+				"--job",
+				"bootstrap"
+			],
+			"options": {
+				"shell": {
+					"executable": "/bin/bash",
+					"args": ["-c"]
+				},
+				"env": {
+					"PATH": "${env:PATH}:${env:HOME}/bin:${env:HOME}/zig",
+				},
+			},
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+			},
+			"label": "act: Run bootstrap job with exported AWS credentials"
 		}
 	]
 }
