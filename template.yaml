@@ -34,6 +34,11 @@ Conditions:
     Fn::Equals:
       - !Ref Domain
       - archodex.com
+  HasAPIBootstrapMD5Sum:
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref APIBootstrapMD5Sum
+          - ""
 
 Resources:
   AuthDomainSESFeedbackRecords:
@@ -1388,7 +1393,7 @@ Resources:
               DomainValidationOptions:
                 - DomainName: !Sub app.${Domain}
                   HostedZoneId: !Ref HostedZoneId
-          
+
           FrontendDomainCertificateParameter:
             Type: Custom::CrossRegionSSMParameter
             Properties:
@@ -1480,6 +1485,7 @@ Resources:
 
   AccountsReplicaTableCustomResourceHandler:
     Type: AWS::Serverless::Function
+    DependsOn: AccountsReplicaTableCustomResourceHandlerLogs
     Properties:
       Architectures:
         - arm64
@@ -1660,7 +1666,7 @@ Resources:
   AccountsReplicaTableCustomResourceHandlerLogs:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AccountsReplicaTableCustomResourceHandler}
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-accounts-replica-table-custom-resource-handler
 
   AccountsReplicaTables:
     Type: AWS::CloudFormation::CustomResource
@@ -1964,6 +1970,7 @@ Resources:
 
   RegionalBackendsStacks:
     Type: AWS::CloudFormation::StackSet
+    Condition: HasAPIBootstrapMD5Sum
     Properties:
       AdministrationRoleARN: !GetAtt RegionalBackendsStackSetAdministrationRole.Arn
       Capabilities:
@@ -2061,7 +2068,7 @@ Resources:
               Timeout: 30
               TracingConfig:
                 Mode: Active
-          
+
           APIRESTAPIANYproxyPermissionProd:
             Type: AWS::Lambda::Permission
             Properties:
@@ -2069,7 +2076,7 @@ Resources:
               FunctionName: !Ref API
               Principal: !Sub apigateway.${AWS::URLSuffix}
               SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RESTAPI}/Prod/*/*
-          
+
           APILogGroup:
             Type: AWS::Logs::LogGroup
             DeletionPolicy: Retain
