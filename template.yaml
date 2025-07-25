@@ -85,7 +85,156 @@ Resources:
           ResourceRecords:
             - '"v=DMARC1; p=reject;"'
 
+  SESVerificationWaiterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SESVerificationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:GetIdentityVerificationAttributes
+                Resource: '*'
+
+  SESVerificationWaiterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-ses-verification-waiter
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt SESVerificationWaiterRole.Arn
+      Timeout: 900
+      Code:
+        ZipFile: |
+          const https = require('https');
+          const { SESClient, GetIdentityVerificationAttributesCommand } = require('@aws-sdk/client-ses');
+
+          exports.handler = async (event, context) => {
+            console.log('Event:', JSON.stringify(event, null, 2));
+
+            const sesClient = new SESClient();
+
+            try {
+              if (event.RequestType === 'Delete') {
+                return await sendResponse(event, 'SUCCESS', context);
+              }
+
+              const emailIdentity = event?.ResourceProperties.EmailIdentity;
+              if (!emailIdentity) {
+                throw new Error(`No email identity provided, aborting`);
+              }
+
+              const maxWaitTime = 870 * 1000; // 870 seconds (15 min - 30s buffer for CFN response)
+              const startTime = Date.now();
+
+              while (Date.now() - startTime < maxWaitTime) {
+                try {
+                  const command = new GetIdentityVerificationAttributesCommand({
+                    Identities: [emailIdentity]
+                  });
+                  const result = await sesClient.send(command);
+
+                  const status = result.VerificationAttributes[emailIdentity];
+                  console.log(`Verification status for ${emailIdentity}:`, status);
+
+                  if (status && status.VerificationStatus === 'Success') {
+                    console.log(`Identity ${emailIdentity} is verified!`);
+                    return await sendResponse(event, 'SUCCESS', {
+                      VerificationStatus: 'Success'
+                    });
+                  }
+
+                  // Wait before next check - exponential backoff
+                  const elapsed = Date.now() - startTime;
+                  const waitTime = Math.min(120000, 30000 + Math.floor(elapsed / 10000) * 1000);
+
+                  if (Date.now() + waitTime - startTime >= maxWaitTime) {
+                    console.log(`Approaching time limit, aborting`);
+                    break;
+                  }
+
+                  console.log(`Waiting ${waitTime}ms before next check...`);
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+
+                } catch (err) {
+                  console.log('Error checking verification status:', err);
+                  await new Promise(resolve => setTimeout(resolve, 30000));
+                }
+              }
+
+              throw new Error(`Timeout waiting for ${emailIdentity} to be verified after 14.5 minutes`);
+
+            } catch (error) {
+              console.error('Error:', error);
+              return await sendResponse(event, 'FAILED', {}, error.message);
+            }
+          };
+
+          async function sendResponse(event, status, data, reason) {
+            const responseBody = {
+              Status: status,
+              Reason: reason || `See CloudWatch Log Stream: ${data?.logStreamName}`,
+              PhysicalResourceId: event?.ResourceProperties?.EmailIdentity,
+              StackId: event?.StackId,
+              RequestId: event?.RequestId,
+              LogicalResourceId: event?.LogicalResourceId,
+              Data: data
+            };
+
+            console.log('Response:', JSON.stringify(responseBody, null, 2));
+
+            return new Promise((resolve, reject) => {
+              if (!event.ResponseURL) {
+                console.log(`No Response URL, exiting...`)
+                return resolve();
+              }
+
+              const url = require('url').parse(event.ResponseURL);
+              const options = {
+                hostname: url.hostname,
+                port: 443,
+                path: url.path,
+                method: 'PUT',
+                headers: {
+                  'Content-Type': '',
+                  'Content-Length': Buffer.byteLength(JSON.stringify(responseBody))
+                }
+              };
+
+              const req = https.request(options, (res) => {
+                console.log('Status Code:', res.statusCode);
+                resolve();
+              });
+
+              req.on('error', (err) => {
+                console.error('Error sending response:', err);
+                reject(err);
+              });
+
+              req.write(JSON.stringify(responseBody));
+              req.end();
+            });
+          }
+
+  SESVerificationWaiter:
+    Type: Custom::SESVerificationWaiter
+    Properties:
+      ServiceToken: !GetAtt SESVerificationWaiterFunction.Arn
+      EmailIdentity: !Ref AuthDomainSESIdentity
+
   CognitoUserPool:
+    DependsOn: SESVerificationWaiter
     Type: AWS::Cognito::UserPool
     Properties:
       AccountRecoverySetting:
