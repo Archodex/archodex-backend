@@ -25,7 +25,9 @@ async fn main() -> Result<(), anyhow::Error> {
         .expect("build runtime");
 
     // Run the lambda runtime worker thread to completion. The response is sent to the other "runtime" to be processed as needed.
-    thread::spawn(move || tokio_runtime.block_on(migrator::migrate_accounts_database()))
-        .join()
-        .expect("runtime thread should join successfully")
+    thread::spawn(move || {
+        tokio_runtime.block_on(migrator::migrate_accounts_database("dynamodb://", None))
+    })
+    .join()
+    .expect("runtime thread should join successfully")
 }

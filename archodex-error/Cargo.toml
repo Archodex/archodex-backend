@@ -1,0 +1,11 @@
+[package]
+name = "archodex-error"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+serde.workspace = true
+surrealdb.workspace = true
+tracing.workspace = true

@@ -4,17 +4,18 @@ use anyhow::Context;
 use axum::{extract::Path, Extension, Json};
 use serde::{Deserialize, Serialize};
 use surrealdb::{
-    engine::local::Db,
+    engine::any::Any,
     sql::statements::{BeginStatement, CommitStatement},
     Surreal,
 };
 use tracing::info;
 
+use archodex_error::{anyhow, bad_request, bail, not_found};
+
 use crate::{
     account::{Account, AccountQueries},
     auth::{AccountAuth, DashboardAuth},
     db::{accounts_db, BeginReadonlyStatement, QueryCheckFirstRealError},
-    macros::*,
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
     Result,
 };
@@ -25,13 +26,10 @@ pub(crate) struct ListReportApiKeysResponse {
 }
 
 pub(crate) async fn list_report_api_keys(
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
 ) -> Result<Json<ListReportApiKeysResponse>> {
-    let mut begin = BeginStatement::default();
-    begin.readonly = true;
-
     let report_api_keys = db
-        .query(begin)
+        .query(BeginReadonlyStatement)
         .list_report_api_keys_query()
         .query(CommitStatement::default())
         .await?
@@ -57,7 +55,7 @@ pub(crate) struct CreateReportApiKeyResponse {
 
 pub(crate) async fn create_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<CreateReportApiKeyRequest>,
 ) -> Result<Json<CreateReportApiKeyResponse>> {
     let account_id = auth
@@ -105,7 +103,7 @@ pub(crate) async fn create_report_api_key(
 
 pub(crate) async fn revoke_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
     Path(params): Path<HashMap<String, String>>,
 ) -> Result<Json<()>> {
     let Some(report_api_key_id_string) = params.get("report_api_key_id") else {

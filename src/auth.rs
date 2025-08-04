@@ -13,18 +13,14 @@ use josekit::{
     jwt, JoseError,
 };
 use reqwest::header::AUTHORIZATION;
-use surrealdb::{
-    engine::local::Db,
-    sql::statements::{BeginStatement, CommitStatement},
-    Surreal, Uuid,
-};
+use surrealdb::{engine::any::Any, sql::statements::CommitStatement, Surreal, Uuid};
 use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
+use archodex_error::{bail, unauthorized};
 use crate::{
-    db::{accounts_db, QueryCheckFirstRealError},
+    db::{accounts_db, BeginReadonlyStatement, QueryCheckFirstRealError},
     env::Env,
-    macros::*,
     report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
     Result,
@@ -87,7 +83,7 @@ pub(crate) async fn jwks(
 
 pub(crate) trait AccountAuth {
     fn account_id(&self) -> Option<&String>;
-    async fn validate(&self, db: &Surreal<Db>) -> Result<()>;
+    async fn validate(&self, db: &Surreal<Any>) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -107,17 +103,14 @@ impl AccountAuth for DashboardAuth {
         self.account_id.as_ref()
     }
 
-    async fn validate(&self, _db: &Surreal<Db>) -> Result<()> {
+    async fn validate(&self, _db: &Surreal<Any>) -> Result<()> {
         let Some(account_id) = &self.account_id else {
             return Ok(());
         };
 
-        let mut begin_statement = BeginStatement::default();
-        begin_statement.readonly = true;
-
         if accounts_db()
             .await?
-            .query(begin_statement)
+            .query(BeginReadonlyStatement)
             .query("SELECT 1 FROM $user->has_access->(account WHERE record::id(id) == $account_id)")
             .bind(("user", surrealdb::sql::Thing::from(&self.principal)))
             .bind(("account_id", account_id.to_string()))
@@ -228,12 +221,9 @@ impl AccountAuth for ReportApiKeyAuth {
         Some(&self.account_id)
     }
 
-    async fn validate(&self, db: &Surreal<Db>) -> Result<()> {
-        let mut begin_statement = BeginStatement::default();
-        begin_statement.readonly = true;
-
+    async fn validate(&self, db: &Surreal<Any>) -> Result<()> {
         let Some(response) = db
-            .query(begin_statement)
+            .query(BeginReadonlyStatement)
             .report_api_key_is_valid_query(self.key_id)
             .query(CommitStatement::default())
             .await?

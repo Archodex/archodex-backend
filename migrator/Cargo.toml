@@ -6,7 +6,7 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow.workspace = true
 surrealdb.workspace = true
 tokio.workspace = true
 tracing.workspace = true

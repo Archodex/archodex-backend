@@ -1,10 +1,13 @@
 use axum::{extract::Path, Extension, Json};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::{engine::any::Any, Surreal};
 
 use crate::{
-    db::QueryCheckFirstRealError, event::Event, global_container::GlobalContainer,
-    resource::Resource, Result,
+    db::{BeginReadonlyStatement, QueryCheckFirstRealError},
+    event::Event,
+    global_container::GlobalContainer,
+    resource::Resource,
+    Result,
 };
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -25,10 +28,9 @@ pub(super) struct QueryResponse {
 
 pub(super) async fn query(
     Path((_account_id, r#type)): Path<(String, QueryType)>,
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
 ) -> Result<Json<QueryResponse>> {
-    const BEGIN: &str =
-        "BEGIN READONLY; LET $resources: set<object> = []; LET $events: set<object> = [];";
+    const BEGIN: &str = "LET $resources: set<object> = []; LET $events: set<object> = [];";
 
     const FINISH: &str = "{
         resources: $resources,
@@ -46,6 +48,7 @@ pub(super) async fn query(
 
     let query = match r#type {
         QueryType::All => db
+            .query(BeginReadonlyStatement)
             .query(BEGIN)
             .query(Resource::get_all())
             .query(Event::get_all())
@@ -54,7 +57,10 @@ pub(super) async fn query(
         QueryType::Secrets => {
             const SECRETS_QUERY: &str = include_str!("query_secrets.surql");
 
-            db.query(BEGIN).query(SECRETS_QUERY).query(FINISH)
+            db.query(BeginReadonlyStatement)
+                .query(BEGIN)
+                .query(SECRETS_QUERY)
+                .query(FINISH)
         }
     };
 

@@ -5,7 +5,7 @@ use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use surrealdb::{
-    engine::local::Db,
+    engine::any::Any,
     method::Query,
     sql::statements::{BeginStatement, CommitStatement, InsertStatement, UpdateStatement},
     Surreal,
@@ -84,10 +84,10 @@ pub(super) struct Request {
 }
 
 fn upsert_resource_tree_node<'a>(
-    mut query: Query<'a, Db>,
+    mut query: Query<'a, Any>,
     prefix: &mut surrealdb::sql::Array,
     resource_tree_node: ResourceTreeNode,
-) -> Query<'a, Db> {
+) -> Query<'a, Any> {
     // INSERT INTO resource (id, first_seen_at, last_seen_at) VALUES (<id>, <first_seen_at>, <last_seen_at>) ON DUPLICATE KEY UPDATE last_seen_at = <last_seen_at> RETURN NONE
     let mut resource_upsert = InsertStatement::default();
     resource_upsert.into = Some(surrealdb::sql::Table::from("resource").into());
@@ -164,7 +164,7 @@ fn upsert_resource_tree_node<'a>(
     query
 }
 
-fn upsert_events(mut query: Query<'_, Db>, report: EventCapture) -> Query<'_, Db> {
+fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, Any> {
     let first_seen_at = report
         .events
         .iter()
@@ -287,7 +287,7 @@ fn upsert_events(mut query: Query<'_, Db>, report: EventCapture) -> Query<'_, Db
 
 #[axum::debug_handler]
 pub(crate) async fn report(
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<Request>,
 ) -> Result<()> {
     let mut query = db.query(BeginStatement::default());

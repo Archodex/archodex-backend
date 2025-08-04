@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use axum::{extract::Query, Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::{engine::any::Any, Surreal};
 
-use crate::{db::QueryCheckFirstRealError, macros::*, resource::ResourceId};
+use archodex_error::{anyhow, bad_request, bail, ensure, not_found};
+
+use crate::{db::QueryCheckFirstRealError, resource::ResourceId};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct PrincipalChainIdPart {
@@ -188,7 +190,7 @@ pub(super) struct GetResponse {
 }
 
 pub(super) async fn get(
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
     Query(GetRequest { id }): Query<GetRequest>,
 ) -> crate::Result<Json<GetResponse>> {
     let id: PrincipalChainId = match serde_json::from_str(&id) {

@@ -4,9 +4,11 @@ use surrealdb::Uuid;
 use crate::{
     account::Account,
     db::{accounts_db, QueryCheckFirstRealError},
-    macros::*,
     surrealdb_deserializers, Result,
 };
+
+#[cfg(feature = "archodex-com")]
+use archodex_error::anyhow;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct User {
@@ -30,6 +32,7 @@ impl User {
         Ok(())
     }
 
+    #[cfg(feature = "archodex-com")]
     pub(crate) async fn has_user_account(&self) -> Result<bool> {
         #[derive(Deserialize)]
         struct HasAccountResults {

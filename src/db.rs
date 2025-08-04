@@ -3,90 +3,107 @@ use std::{collections::HashMap, sync::LazyLock};
 use anyhow::Context;
 use axum::{extract::Request, middleware::Next, response::Response, Extension};
 use surrealdb::{
-    engine::local::Db,
+    engine::any::Any,
     opt::{capabilities::Capabilities, Config},
     sql::statements::CommitStatement,
     Surreal,
 };
 use tokio::sync::{OnceCell, RwLock};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     account::{Account, AccountQueries},
     auth::AccountAuth,
     env::Env,
-    macros::*,
     Result,
 };
-
-pub(crate) const DYNAMODB_TABLE_PREFIX: &str = "archodex-service-data-";
+use archodex_error::{anyhow, bail};
 
 #[derive(Default)]
 pub(crate) struct BeginReadonlyStatement;
 
 impl surrealdb::opt::IntoQuery for BeginReadonlyStatement {
     fn into_query(self) -> surrealdb::Result<Vec<surrealdb::sql::Statement>> {
-        let mut begin = surrealdb::sql::statements::BeginStatement::default();
-        begin.readonly = true;
+        let begin = {
+            #[cfg(not(feature = "archodex-com"))]
+            {
+                surrealdb::sql::statements::BeginStatement::default()
+            }
+            #[cfg(feature = "archodex-com")]
+            {
+                archodex_com::begin_readonly_statement()
+            }
+        };
+
         Ok(vec![surrealdb::sql::Statement::Begin(begin)])
     }
 }
 
-pub(crate) fn dynamodb_resources_table_name_for_account(account_id: &str) -> String {
-    format!("{DYNAMODB_TABLE_PREFIX}a{account_id}-resources")
+pub(crate) async fn migrate_service_data_database(
+    service_data_surrealdb_url: &str,
+    archodex_account_id: &str,
+) -> anyhow::Result<()> {
+    info!("Migrating 'resources' database for account {archodex_account_id} at URL {service_data_surrealdb_url}...",);
+
+    // We can migrate using the backend API role and the resource policy set
+    // above. But the resource policy can take 30+ seconds to propagate.
+    // Instead, we'll use the customer data management role to migrate the
+    // database.
+    let db = db_for_customer_data_account(
+        service_data_surrealdb_url,
+        archodex_account_id,
+    )
+        .await
+        .with_context(|| format!("Failed to get SurrealDB client for URL {service_data_surrealdb_url} for account {archodex_account_id}"))?;
+
+    migrator::migrate_account_resources_database(&db)
+        .await
+        .with_context(|| format!("Failed to migrate 'resources' database for URL {service_data_surrealdb_url} for account {archodex_account_id}"))?;
+
+    info!("SurrealDB Database at {service_data_surrealdb_url} for account {archodex_account_id} migrated and ready for use");
+
+    Ok(())
 }
 
 pub(crate) async fn db_for_customer_data_account(
-    customer_data_aws_account_id: &str,
+    service_data_surrealdb_url: &str,
     archodex_account_id: &str,
-    role_arn: Option<&str>,
-) -> anyhow::Result<Surreal<Db>> {
-    static DBS_BY_AWS_ACCOUNT_ID: LazyLock<RwLock<HashMap<String, Surreal<Db>>>> =
+) -> anyhow::Result<Surreal<Any>> {
+    static DBS_BY_URL: LazyLock<RwLock<HashMap<String, Surreal<Any>>>> =
         LazyLock::new(|| RwLock::new(HashMap::new()));
 
-    let dbs_by_aws_account_id = DBS_BY_AWS_ACCOUNT_ID.read().await;
+    let dbs_by_url = DBS_BY_URL.read().await;
 
-    let db = if let Some(db) = dbs_by_aws_account_id.get(customer_data_aws_account_id) {
+    let db = if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
         db.clone()
     } else {
-        drop(dbs_by_aws_account_id);
+        drop(dbs_by_url);
 
-        let mut dbs_by_aws_account_id = DBS_BY_AWS_ACCOUNT_ID.write().await;
+        let mut dbs_by_url = DBS_BY_URL.write().await;
 
-        match dbs_by_aws_account_id.get(customer_data_aws_account_id) {
+        match dbs_by_url.get(service_data_surrealdb_url) {
             Some(db) => db.clone(),
             None => {
-                let path = if Env::is_local_dev() {
-                    format!("{DYNAMODB_TABLE_PREFIX};local=8001")
-                } else {
-                    let mut path = format!(
-                        "arn:{aws_partition}:dynamodb:{aws_region}:{customer_data_aws_account_id}:table/{DYNAMODB_TABLE_PREFIX}",
-                        aws_partition = Env::aws_partition(),
-                        aws_region = Env::aws_region(),
-                    );
-
-                    if let Some(role_arn) = role_arn {
-                        path.push_str(";role_arn=");
-                        path.push_str(role_arn);
-                    }
-
-                    path
-                };
-
-                let db = Surreal::new::<surrealdb::engine::local::DynamoDB>((
-                    path,
+                let db = surrealdb::engine::any::connect((
+                    service_data_surrealdb_url,
                     Config::default()
                         .capabilities(Capabilities::default().with_live_query_notifications(false))
                         .strict(),
                 ))
                 .await?;
 
-                dbs_by_aws_account_id.insert(customer_data_aws_account_id.to_string(), db.clone());
+                dbs_by_url.insert(service_data_surrealdb_url.to_string(), db.clone());
 
                 db
             }
         }
     };
+
+    if let Some(creds) = Env::surrealdb_creds() {
+        db.signin(creds)
+            .await
+            .with_context(|| format!("Failed to sign in to SurrealDB instance {service_data_surrealdb_url} with SURREALDB_USERNAME and SURREALDB_PASSWORD environment values"))?;
+    }
 
     db.use_ns(format!("a{archodex_account_id}"))
         .use_db("resources")
@@ -124,24 +141,27 @@ pub(crate) async fn db<A: AccountAuth>(
     Ok(next.run(req).await)
 }
 
-pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Db>> {
-    static ACCOUNTS_DB: OnceCell<Surreal<Db>> = OnceCell::const_new();
+pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Any>> {
+    static ACCOUNTS_DB: OnceCell<Surreal<Any>> = OnceCell::const_new();
 
     Ok(ACCOUNTS_DB
         .get_or_try_init(|| async {
-            let path = if Env::is_local_dev() {
-                ";local=8001"
-            } else {
-                ""
-            };
-
-            let db = Surreal::new::<surrealdb::engine::local::DynamoDB>((
-                path,
+            let db = surrealdb::engine::any::connect((
+                #[cfg(feature = "archodex-com")]
+                Env::accounts_surrealdb_url(),
+                #[cfg(not(feature = "archodex-com"))]
+                Env::surrealdb_url(),
                 Config::default()
                     .capabilities(Capabilities::default().with_live_query_notifications(false))
                     .strict(),
             ))
             .await?;
+
+            if let Some(creds) = Env::surrealdb_creds() {
+                db.signin(creds)
+                    .await
+                    .context("Failed to sign in to SurrealDB with SURREALDB_USERNAME and SURREALDB_PASSWORD environment values")?;
+            }
 
             db.use_ns("archodex").use_db("accounts").await?;
 
@@ -157,6 +177,7 @@ pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Db>> {
 // the first statement, the normal `check()` method will return QueryNotExecuted
 // instead of the true cause of the error.
 pub(crate) trait QueryCheckFirstRealError {
+    #[allow(clippy::result_large_err)]
     fn check_first_real_error(self) -> surrealdb::Result<Self>
     where
         Self: Sized;

@@ -1,11 +1,11 @@
+use anyhow::Context as _;
+use archodex_backend::env::Env;
 use tracing::info;
 
 #[cfg(debug_assertions)]
 const RUNTIME_STACK_SIZE: usize = 20 * 1024 * 1024; // 20MiB in debug mode
 #[cfg(not(debug_assertions))]
 const RUNTIME_STACK_SIZE: usize = 10 * 1024 * 1024; // 10MiB in release mode
-
-const PORT: u16 = 5731;
 
 fn setup_logging() {
     use std::io::IsTerminal;
@@ -39,7 +39,7 @@ fn setup_logging() {
     };
 }
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> anyhow::Result<()> {
     setup_logging();
 
     tokio::runtime::Builder::new_multi_thread()
@@ -48,12 +48,32 @@ fn main() -> Result<(), std::io::Error> {
         .build()
         .unwrap()
         .block_on(async {
-            let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{PORT}"))
+            {
+                migrator::migrate_accounts_database(
+                    Env::accounts_surrealdb_url(),
+                    Env::surrealdb_creds(),
+                )
                 .await
-                .unwrap_or_else(|_| panic!("Failed to listen on port {PORT}"));
+                .with_context(|| {
+                    format!(
+                        "Failed to migrate accounts database for URL {}",
+                        Env::accounts_surrealdb_url()
+                    )
+                })?;
+            }
 
-            info!("Listening on port {PORT}");
+            let port = Env::port();
 
-            axum::serve(listener, archodex_backend::router::router()).await
-        })
+            let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+                .await
+                .unwrap_or_else(|_| panic!("Failed to listen on port {port}"));
+
+            info!("Listening on port {port}");
+
+            axum::serve(listener, archodex_backend::router::router()).await?;
+
+            anyhow::Ok(())
+        })?;
+
+    unreachable!("Tokio runtime completed unexpectedly");
 }

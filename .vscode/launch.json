@@ -60,7 +60,7 @@
       "env": {
         "ARCHODEX_DEV_MODE": "remote",
         "AWS_PROFILE": "archodex-dev-local",
-        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,info",
         "COLORTERM": "truecolor",
         "AWS_PARTITION": "aws",
         "AWS_REGION": "us-west-2",
@@ -76,6 +76,100 @@
         "COGNITO_ISSUER_ENDPOINT": "https://cognito-idp.us-west-2.amazonaws.com",
         "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
       }
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug local backend server",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=server",
+          "--package=server"
+        ],
+        "filter": {
+          "name": "server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "ARCHODEX_DEV_MODE": "local",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
+        "COLORTERM": "truecolor",
+        "ENDPOINT": "http://localhost:5732",
+        "SURREALDB_URL": "${config:archodex.LOCAL_SURREALDB_URL}",
+        "SURREALDB_USERNAME": "${config:archodex.LOCAL_SURREALDB_USERNAME}",
+        "SURREALDB_PASSWORD": "${config:archodex.LOCAL_SURREALDB_PASSWORD}",
+        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_DOMAIN}",
+        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
+        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
+        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
+        "RUST_BACKTRACE": "1",
+      },
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug archodex-com backend server",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=server",
+          "--package=server",
+          "--features=archodex-com",
+          "--config=patch.crates-io.surrealdb.git='https://github.com/Archodex/surrealdb.git'",
+        ],
+        "filter": {
+          "name": "server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "ARCHODEX_DEV_MODE": "local",
+        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
+        "COLORTERM": "truecolor",
+        "CUSTOMER_DATA_OU_ID": "${config:archodex.CUSTOMER_DATA_OU_ID}",
+        "ENDPOINT": "http://localhost:5731",
+        "ACCOUNTS_SURREALDB_URL": "${config:archodex.ARCHODEX_COM_SURREALDB_URL}",
+        "SURREALDB_USERNAME": "${config:archodex.ARCHODEX_COM_SURREALDB_USERNAME}",
+        "SURREALDB_PASSWORD": "${config:archodex.ARCHODEX_COM_SURREALDB_PASSWORD}",
+        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_ENV_NAME}.dev.servicearch.com",
+        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
+        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
+        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
+        "RUST_BACKTRACE": "1",
+      },
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'migrator' in local dev mode",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=migrator",
+          "--package=migrator"
+        ],
+        "filter": {
+          "name": "migrator",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "AWS_REGION": "us-west-2",
+        "AWS_ACCESS_KEY_ID": "invalid",
+        "AWS_SECRET_ACCESS_KEY": "invalid",
+        "AWS_ENDPOINT_URL": "http://localhost:8001",
+        //"RUST_LOG": "surrealdb_core::kvs::dynamodb=trace,surrealdb::core::kvs::tr=trace,info",
+        "COLORTERM": "truecolor",
+      },
     },
     {
       "type": "lldb",

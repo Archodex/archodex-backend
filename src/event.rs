@@ -105,18 +105,4 @@ impl Event {
     pub(crate) fn get_all() -> &'static str {
         "$events = SELECT * OMIT id FROM event PARALLEL;"
     }
-
-    pub(crate) fn add_events_going_to_resources() -> &'static str {
-        "$events = array::concat(
-            $events,
-            array::flatten(SELECT VALUE <-event.* FROM $resources PARALLEL)
-        ).distinct();"
-    }
-
-    pub(crate) fn add_events_going_from_resources() -> &'static str {
-        "$events = array::concat(
-            $events,
-            array::flatten(SELECT VALUE ->event.* FROM $resources PARALLEL)
-        ).distinct();"
-    }
 }

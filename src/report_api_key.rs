@@ -13,7 +13,9 @@ use prost::Message;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{env::Env, macros::*, next_binding, surrealdb_deserializers, user::User};
+use archodex_error::{anyhow, bail, ensure};
+
+use crate::{env::Env, next_binding, surrealdb_deserializers, user::User};
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct ReportApiKey {
@@ -67,7 +69,7 @@ impl ReportApiKey {
         account_id: &str,
         account_salt: Vec<u8>,
     ) -> anyhow::Result<String> {
-        let cipher = Aes128Gcm::new(Env::api_key_kms_data_key().await);
+        let cipher = Aes128Gcm::new(Env::api_private_key().await);
         let nonce = Aes128Gcm::generate_nonce(&mut rand::rngs::OsRng);
 
         let message = proto::ReportApiKeyEncryptedContents {
@@ -152,7 +154,7 @@ impl ReportApiKey {
         );
 
         let nonce = aead::Nonce::<Aes128Gcm>::from_slice(&value.nonce);
-        let cipher = Aes128Gcm::new(Env::api_key_kms_data_key().await);
+        let cipher = Aes128Gcm::new(Env::api_private_key().await);
 
         let aad = proto::ReportApiKeyEncryptedAad {
             key_id,

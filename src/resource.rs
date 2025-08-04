@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::{engine::any::Any, Surreal};
 
-use crate::{macros::*, next_binding};
+use archodex_error::{anyhow, bail, ensure};
 
 #[derive(Clone, Debug, Eq, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -284,20 +284,6 @@ impl Resource {
     pub(crate) fn get_all() -> &'static str {
         "$resources = SELECT * FROM resource WHERE id != resource:[] PARALLEL;"
     }
-
-    pub(crate) fn add_resources_of_type(r#type: &str) -> (String, (String, &str)) {
-        let binding = next_binding();
-
-        (
-            format!(
-                "$resources = array::concat(
-                    $resources,
-                    SELECT * FROM resource WHERE resource_type = ${binding} PARALLEL
-                ).distinct();"
-            ),
-            (binding, r#type),
-        )
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -308,7 +294,7 @@ pub(super) struct SetTagsRequest {
 }
 
 pub(super) async fn set_environments(
-    Extension(db): Extension<Surreal<Db>>,
+    Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<SetTagsRequest>,
 ) -> crate::Result<()> {
     const QUERY: &str =

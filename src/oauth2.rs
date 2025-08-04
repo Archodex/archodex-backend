@@ -11,7 +11,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use crate::{env::Env, macros::*, PublicError, Result};
+use archodex_error::{anyhow, ensure};
+
+use crate::{env::Env, PublicError, Result};
 
 #[derive(Deserialize)]
 pub(crate) struct IdpResponseQueryParams {

@@ -1,12 +1,15 @@
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::local::Db, Surreal};
+use surrealdb::{Surreal, engine::any::Any};
 
 use crate::{
-    db::db_for_customer_data_account, env::Env, macros::*, next_binding, surrealdb_deserializers,
+    db::{db_for_customer_data_account, migrate_service_data_database},
+    env::Env,
+    next_binding, surrealdb_deserializers,
     user::User,
 };
+use archodex_error::{anyhow, bail};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct ServiceDataLocation {
@@ -16,27 +19,12 @@ pub(crate) struct ServiceDataLocation {
     account_id: String,
 }
 
-impl ServiceDataLocation {
-    pub(crate) fn new(region: String, account_id: String) -> Self {
-        Self {
-            r#type: "dynamodb".to_string(),
-            partition: "aws".to_string(),
-            region,
-            account_id,
-        }
-    }
-
-    pub(crate) fn account_id(&self) -> &str {
-        &self.account_id
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Account {
     #[serde(deserialize_with = "surrealdb_deserializers::string::deserialize")]
     id: String,
     endpoint: String,
-    service_data_location: Option<ServiceDataLocation>,
+    service_data_surrealdb_url: Option<String>,
     #[serde(deserialize_with = "surrealdb_deserializers::bytes::deserialize")]
     salt: Vec<u8>,
     created_at: Option<DateTime<Utc>>,
@@ -58,49 +46,52 @@ impl From<Account> for AccountPublic {
 }
 
 impl Account {
-    pub(crate) fn new(
-        endpoint: String,
-        service_data_location: Option<ServiceDataLocation>,
-    ) -> Self {
-        Self {
-            id: if Env::is_local_dev() {
-                "1000000001".to_string()
-            } else {
-                rand::thread_rng()
-                    .gen_range::<u64, _>(1000000000..=9999999999)
-                    .to_string()
-            },
+    pub(crate) async fn new(endpoint: String, account_id: Option<String>) -> anyhow::Result<Self> {
+        let id = if let Some(account_id) = account_id {
+            account_id
+        } else if Env::is_local_dev() {
+            "1000000001".to_string()
+        } else {
+            rand::thread_rng()
+                .gen_range::<u64, _>(1000000000..=9999999999)
+                .to_string()
+        };
+
+        #[cfg(not(feature = "archodex-com"))]
+        let service_data_surrealdb_url = Some(Env::surrealdb_url().to_string());
+        #[cfg(feature = "archodex-com")]
+        let service_data_surrealdb_url = if endpoint == Env::endpoint() {
+            Some(archodex_com::create_account_service_database(&id).await?)
+        } else {
+            None
+        };
+
+        if let Some(service_data_surrealdb_url) = &service_data_surrealdb_url {
+            migrate_service_data_database(service_data_surrealdb_url, &id).await?;
+        }
+
+        Ok(Self {
+            id,
             endpoint,
-            service_data_location,
+            service_data_surrealdb_url,
             salt: rand::thread_rng().gen::<[u8; 16]>().to_vec(),
             created_at: None,
-        }
-    }
-
-    pub(crate) fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub(crate) fn service_data_location(&self) -> Option<&ServiceDataLocation> {
-        self.service_data_location.as_ref()
+        })
     }
 
     pub(crate) fn salt(&self) -> &[u8] {
         &self.salt
     }
 
-    pub(crate) async fn surrealdb_client(&self) -> anyhow::Result<Surreal<Db>> {
-        let Some(service_data_location) = &self.service_data_location else {
-            bail!("Account instance missing service data location when attempting to create SurrealDB client");
-        };
-
-        ensure!(
-            service_data_location.r#type == "dynamodb",
-            "Unsupported service data location type ({type}) when constructing SurrealDB client",
-            type = service_data_location.r#type
-        );
-
-        db_for_customer_data_account(&service_data_location.account_id, &self.id, None).await
+    pub(crate) async fn surrealdb_client(&self) -> anyhow::Result<Surreal<Any>> {
+        if let Some(service_data_surrealdb_url) = &self.service_data_surrealdb_url {
+            db_for_customer_data_account(service_data_surrealdb_url, &self.id).await
+        } else {
+            bail!(
+                "No service data SurrealDB URL configured for account {}",
+                self.id
+            );
+        }
     }
 }
 
@@ -118,14 +109,14 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
     fn create_account_query(self, account: &Account) -> surrealdb::method::Query<'r, C> {
         let account_binding = next_binding();
         let endpoint_binding = next_binding();
-        let service_data_location_binding = next_binding();
+        let service_data_surrealdb_url_binding = next_binding();
         let salt_binding = next_binding();
 
         self
-            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_location: ${service_data_location_binding}, salt: ${salt_binding} }} RETURN NONE"))
+            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
             .bind((endpoint_binding, account.endpoint.to_owned()))
-            .bind((service_data_location_binding, account.service_data_location.to_owned()))
+            .bind((service_data_surrealdb_url_binding, account.service_data_surrealdb_url.to_owned()))
             .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.to_owned())))
     }
 

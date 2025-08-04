@@ -9,7 +9,7 @@ use serde::Serialize;
 use tracing::error;
 
 #[derive(Debug)]
-pub(super) struct PublicError {
+pub struct PublicError {
     status_code: axum::http::StatusCode,
     message: String,
 }
@@ -22,7 +22,7 @@ impl std::fmt::Display for PublicError {
 }
 
 impl PublicError {
-    pub(super) fn new<S: Into<String>>(status_code: StatusCode, message: S) -> Self {
+    pub fn new<S: Into<String>>(status_code: StatusCode, message: S) -> Self {
         Self {
             status_code,
             message: message.into(),
@@ -30,7 +30,7 @@ impl PublicError {
     }
 }
 
-pub(super) type Result<T> = std::result::Result<T, PublicError>;
+pub type Result<T> = std::result::Result<T, PublicError>;
 
 // Tell axum how to convert `Error` into a response.
 impl IntoResponse for PublicError {
@@ -92,95 +92,85 @@ where
     }
 }
 
-pub(super) mod macros {
-    #[allow(unused_macros)]
-    macro_rules! bad_request {
+#[macro_export]
+macro_rules! bad_request {
         ($msg:literal $(,)?) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::BAD_REQUEST,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::BAD_REQUEST,
                 format!($fmt, $($arg)*),
             ))
         };
     }
-    #[allow(unused_imports)]
-    pub(crate) use bad_request;
 
-    #[allow(unused_macros)]
-    macro_rules! unauthorized {
+#[macro_export]
+macro_rules! unauthorized {
         () => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::UNAUTHORIZED,
                 "Unauthorized",
             ))
         };
     }
-    #[allow(unused_imports)]
-    pub(crate) use unauthorized;
 
-    #[allow(unused_macros)]
-    macro_rules! forbidden {
+#[macro_export]
+macro_rules! forbidden {
         ($msg:literal $(,)?) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::FORBIDDEN,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::FORBIDDEN,
                 format!($fmt, $($arg)*),
             ))
         };
     }
-    #[allow(unused_imports)]
-    pub(crate) use forbidden;
 
-    #[allow(unused_macros)]
-    macro_rules! not_found {
+#[macro_export]
+macro_rules! not_found {
         ($msg:literal $(,)?) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::NOT_FOUND,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::NOT_FOUND,
                 format!($fmt, $($arg)*),
             ))
         };
     }
-    #[allow(unused_imports)]
-    pub(crate) use not_found;
 
-    #[allow(unused_macros)]
-    macro_rules! conflict {
+#[macro_export]
+macro_rules! conflict {
         ($msg:literal $(,)?) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::CONFLICT,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::error::PublicError::new(
+            bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::CONFLICT,
                 format!($fmt, $($arg)*),
             ))
         };
     }
-    #[allow(unused_imports)]
-    pub(crate) use conflict;
 
-    // Re-implement anyhow macros to work with above error types
-    pub(crate) use anyhow::anyhow;
+// Re-implement anyhow macros to work with above error types
+pub use anyhow::anyhow;
 
-    macro_rules! bail {
+#[macro_export]
+macro_rules! bail {
         ($msg:literal $(,)?) => {
             return Err(anyhow!($msg).into())
         };
@@ -191,31 +181,27 @@ pub(super) mod macros {
             return Err(anyhow!($fmt, $($arg)*).into())
         };
     }
-    pub(crate) use bail;
 
-    #[allow(unused_macros)]
-    macro_rules! ensure {
+#[macro_export]
+macro_rules! ensure {
         ($cond:expr $(,)?) => {
             if !$cond {
-                bail!(concat!("Condition failed: `", stringify!($cond), "`"))
+                $crate::bail!(concat!("Condition failed: `", stringify!($cond), "`"))
             }
         };
         ($cond:expr, $msg:literal $(,)?) => {
             if !$cond {
-                bail!($msg);
+                $crate::bail!($msg);
             }
         };
         ($cond:expr, $err:expr $(,)?) => {
             if !$cond {
-                bail!($err);
+                $crate::bail!($err);
             }
         };
         ($cond:expr, $fmt:expr, $($arg:tt)*) => {
             if !$cond {
-                bail!($fmt, $($arg)*);
+                $crate::bail!($fmt, $($arg)*);
             }
         };
-    }
-    #[allow(unused_imports)]
-    pub(crate) use ensure;
 }
