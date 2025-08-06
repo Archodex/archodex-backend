@@ -1,4 +1,4 @@
-use std::{env, io, thread};
+use std::{io, thread};
 
 use futures_lite::future;
 use tokio::runtime::Builder;
@@ -21,8 +21,6 @@ fn setup_logging() {
 
 fn main() -> Result<(), io::Error> {
     setup_logging();
-
-    env::set_var("AWS_LAMBDA_HTTP_IGNORE_STAGE_IN_PATH", "true");
 
     // Create a channel used to send and receive outputs from our lambda handler. Realistically, this would be either an unbounded channel
     // or a bounded channel with a higher capacity as needed.
@@ -53,8 +51,7 @@ fn main() -> Result<(), io::Error> {
     my_runtime(move || future::block_on(app_runtime_task(lambda_rx.clone(), shutdown_tx.clone())));
 
     // Block the main thread until a shutdown signal is received.
-    future::block_on(shutdown_rx.recv())
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))
+    future::block_on(shutdown_rx.recv()).map_err(|err| io::Error::other(format!("{err:?}")))
 }
 
 /// A task to be ran on the custom runtime. Once a response from the lambda runtime is received then a shutdown signal

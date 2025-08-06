@@ -2047,6 +2047,7 @@ Resources:
               FunctionName: archodex-backend-api
               Environment:
                 Variables:
+                  AWS_LAMBDA_HTTP_IGNORE_STAGE_IN_PATH: 'true'
                   AWS_PARTITION: !Ref AWS::Partition
                   AWS_ACCOUNT_ID: !Ref AWS::AccountId
                   ENDPOINT: !Sub https://api.${AWS::Region}.${Domain}

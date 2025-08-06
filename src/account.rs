@@ -74,7 +74,7 @@ impl Account {
             id,
             endpoint,
             service_data_surrealdb_url,
-            salt: rand::thread_rng().gen::<[u8; 16]>().to_vec(),
+            salt: rand::thread_rng().r#gen::<[u8; 16]>().to_vec(),
             created_at: None,
         })
     }
