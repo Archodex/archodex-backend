@@ -1436,7 +1436,9 @@ Resources:
       ParameterName: !Sub /${AWS::StackName}/cognito_domain_certificate
 
   CognitoUserPoolDomain:
-    DependsOn: CrossRegionArchodexEnvironmentStacks
+    DependsOn:
+      - CrossRegionArchodexEnvironmentStacks
+      - CognitoDomainVerificationRecord
     Type: AWS::Cognito::UserPoolDomain
     Properties:
       CustomDomainConfig:
@@ -1444,6 +1446,16 @@ Resources:
       Domain: auth.{{resolve:ssm:/account_subdomain/domain}}
       ManagedLoginVersion: 2
       UserPoolId: !Ref CognitoUserPool
+
+  CognitoDomainVerificationRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: "{{resolve:ssm:/account_subdomain/hosted_zone_id}}"
+      Name: "{{resolve:ssm:/account_subdomain/domain}}"
+      Type: A
+      TTL: 300
+      ResourceRecords:
+        - "192.0.2.1" # Documentation IP from RFC 5737
 
   CognitoUserPoolDomainDNSRecord:
     Type: AWS::Route53::RecordSet
