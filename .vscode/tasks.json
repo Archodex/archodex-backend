@@ -67,7 +67,7 @@
         "--var",
         "DEPLOY_REGIONS=${input:DEV_REGIONS}",
         "--job",
-        "bootstrap"
+        "bootstrap-infra"
       ],
       "options": {
         "shell": {
