@@ -50,39 +50,6 @@
         "kind": "build"
       },
       "label": "act: Run GitHub Actions Workflow deploy.yml locally for dev"
-    },
-    {
-      "type": "shell",
-      "command": "act",
-      "args": [
-        "workflow_dispatch",
-        "--env-file",
-        "<(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)",
-        "--var",
-        "ARCHODEX_SOURCE_DIR=${workspaceFolder}",
-        "--platform",
-        "ubuntu-latest=-self-hosted",
-        "--container-architecture",
-        "linux/amd64",
-        "--var",
-        "DEPLOY_REGIONS=${input:DEV_REGIONS}",
-        "--job",
-        "bootstrap-infra"
-      ],
-      "options": {
-        "shell": {
-          "executable": "/bin/bash",
-          "args": ["-c"]
-        },
-        "env": {
-          "PATH": "${env:PATH}:${env:HOME}/bin:${env:HOME}/zig"
-        }
-      },
-      "problemMatcher": [],
-      "group": {
-        "kind": "build"
-      },
-      "label": "act: Run bootstrap job with exported AWS credentials"
     }
   ]
 }
