@@ -34,11 +34,6 @@ Conditions:
     Fn::Equals:
       - !Ref Domain
       - archodex.com
-  HasAPIBootstrapMD5Sum:
-    Fn::Not:
-      - Fn::Equals:
-          - !Ref APIBootstrapMD5Sum
-          - ""
 
 Resources:
   AuthDomainSESFeedbackRecords:
@@ -1982,7 +1977,6 @@ Resources:
 
   RegionalBackendsStacks:
     Type: AWS::CloudFormation::StackSet
-    Condition: HasAPIBootstrapMD5Sum
     Properties:
       AdministrationRoleARN: !GetAtt RegionalBackendsStackSetAdministrationRole.Arn
       Capabilities:
