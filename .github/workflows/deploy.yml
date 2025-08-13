@@ -29,7 +29,7 @@ jobs:
           curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
           unzip -q /tmp/awscliv2.zip -d /tmp
           rm /tmp/awscliv2.zip
-          /tmp/aws/install --update
+          sudo /tmp/aws/install --update
           rm -rf /tmp/aws/
           aws --version
 
@@ -176,7 +176,7 @@ jobs:
           curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
           unzip -q /tmp/awscliv2.zip -d /tmp
           rm /tmp/awscliv2.zip
-          /tmp/aws/install --update
+          sudo /tmp/aws/install --update
           rm -rf /tmp/aws/
           aws --version
 
@@ -230,7 +230,7 @@ jobs:
           curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
           unzip -q /tmp/awscliv2.zip -d /tmp
           rm /tmp/awscliv2.zip
-          /tmp/aws/install --update
+          sudo /tmp/aws/install --update
           rm -rf /tmp/aws/
           aws --version
 
@@ -268,7 +268,7 @@ jobs:
           curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
           unzip -q /tmp/awscliv2.zip -d /tmp
           rm /tmp/awscliv2.zip
-          /tmp/aws/install --update
+          sudo /tmp/aws/install --update
           rm -rf /tmp/aws/
           aws --version
 
