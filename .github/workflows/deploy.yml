@@ -123,7 +123,7 @@ jobs:
 
       - name: Build with Cargo Lambda
         run: |-
-          cargo lambda build --release --arm64 --package lambda --output-format zip
+          cargo lambda build --config net.git-fetch-with-cli=true --release --arm64 --package lambda --output-format zip
 
       - name: Calculate MD5 sum
         id: calculate-md5
