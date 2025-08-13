@@ -98,9 +98,11 @@ jobs:
       - name: Checkout code
         if: env.ACT != 'true'
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure Git for access to Archodex/surrealdb private repository
-        run: |
+        run: |-
           git config --global url."https://x-access-token:${{ secrets.ARCHODEX_PRIVATE_SURREALDB_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install development packages
