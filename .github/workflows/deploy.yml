@@ -132,6 +132,7 @@ jobs:
         id: calculate-md5
         run: |-
           MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          echo "🔍 API_BOOTSTRAP_MD5SUM calculated: $MD5SUM"
           echo "md5sum=$MD5SUM" >> $GITHUB_OUTPUT
 
   generateMatrix:
@@ -150,6 +151,7 @@ jobs:
             json_array+="\"${REGIONS[i]}\""
           done
           json_array+="]"
+          echo "🔍 Generated matrix: {\"region\":$json_array}"
           echo "matrix={\"region\":$json_array}" >> $GITHUB_OUTPUT
 
   bootstrap-infra:
@@ -242,7 +244,7 @@ jobs:
             "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml"
 
   deploy:
-    needs: [upload]
+    needs: [build, upload]
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
@@ -268,6 +270,11 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
           echo "Starting CloudFormation deployment..."
+
+          # DEBUG
+          echo "🔍 API_BOOTSTRAP_MD5SUM calculated: $API_BOOTSTRAP_MD5SUM"
+          echo "🔍 ParameterKey=APIBootstrapMD5Sum,ParameterValue=API_BOOTSTRAP_MD5SUM"
+          # DEBUG
 
           # Check if stack exists
           if aws cloudformation describe-stacks --stack-name archodex-backend >/dev/null 2>&1; then
