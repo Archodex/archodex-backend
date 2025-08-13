@@ -1868,6 +1868,9 @@ Resources:
                 Action: s3:GetObject
                 Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-*/backend/api/bootstrap-*.zip
               - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub arn:${AWS::Partition}:s3:::cloudformation-deployment-assets-${AWS::AccountId}-*
+              - Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt APIRole.Arn
               - Effect: Allow
