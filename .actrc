@@ -1,0 +1,4 @@
+# Default volume mounts for cargo cache persistence
+--container-options -v ~/.cargo/registry:/usr/local/cargo/registry
+--container-options -v ~/.cargo/git:/usr/local/cargo/git
+--container-options -v ./target:/workspace/target

@@ -1,39 +1,236 @@
 name: Deploy
 
-on: workflow_dispatch
-#  push:
-#    branches:
-#      - main
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+env:
+  AWS_PAGER: ""
 
 jobs:
-  build:
+  check-prerequisites:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
+        run: |-
+          echo "Installing AWS CLI v2"
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
+      - name: Check for domain A record
+        run: |
+          echo "Checking prerequisites for Cognito custom domain..."
+
+          # Get the domain from SSM parameters
+          PARAMS=$(aws ssm get-parameters --names /account_subdomain/domain /account_subdomain/hosted_zone_id --query 'Parameters[*].[Name,Value]' --output text)
+          DOMAIN=$(echo "$PARAMS" | grep "/account_subdomain/domain" | awk '{print $2}')
+          HOSTED_ZONE_ID=$(echo "$PARAMS" | grep "/account_subdomain/hosted_zone_id" | awk '{print $2}')
+
+          echo "Domain: $DOMAIN"
+          echo "Hosted Zone ID: $HOSTED_ZONE_ID"
+
+          # Check if A record exists for the root domain
+          echo "Checking for A record on $DOMAIN..."
+
+          A_RECORD_EXISTS=$(aws route53 list-resource-record-sets \
+            --hosted-zone-id "$HOSTED_ZONE_ID" \
+            --query "ResourceRecordSets[?Name=='${DOMAIN}.' && Type=='A'] | length(@)" \
+            --output text)
+
+          if [ "$A_RECORD_EXISTS" -eq "0" ]; then
+            echo "❌ ERROR: No A record found for $DOMAIN"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  PREREQUISITE NOT MET: Root domain A record is missing"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "AWS Cognito requires an A record for the root domain ($DOMAIN) to verify"
+            echo "domain ownership when setting up custom domains."
+            echo ""
+            echo "👉 ACTION REQUIRED: Deploy the archodex-www stack first"
+            echo ""
+            echo "The archodex-www stack creates the necessary root domain A record that points"
+            echo "to the CloudFront distribution. This satisfies Cognito's verification requirement."
+            echo ""
+            echo "Steps to resolve:"
+            echo "1. Deploy the archodex-www stack to this environment"
+            echo "2. Wait for DNS propagation (usually immediate, but can take up to 60 minutes)"
+            echo "3. Re-run this deployment workflow"
+            echo ""
+            echo "For more information, see:"
+            echo "https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-add-custom-domain.html"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          else
+            echo "✅ A record found for $DOMAIN"
+            echo ""
+            # Get details about the A record
+            aws route53 list-resource-record-sets \
+              --hosted-zone-id "$HOSTED_ZONE_ID" \
+              --query "ResourceRecordSets[?Name=='${DOMAIN}.' && Type=='A']" \
+              --output table
+            echo ""
+            echo "Prerequisites check passed. Continuing with deployment..."
+          fi
+
+  build:
+    needs: [check-prerequisites]
+    runs-on: ubuntu-latest-arm64
+    outputs:
+      api-bootstrap-md5sum: ${{ steps.calculate-md5.outputs.md5sum }}
     steps:
       - name: Checkout code
-        if: ${{ !env.ACT }}
+        if: env.ACT != 'true'
         uses: actions/checkout@v4
 
-      - name: Build with Cargo
-        run: cargo lambda build --release --arm64 --package lambda --output-format zip
+      - name: Configure Git for private repositories
+        if: env.ACT == 'true'
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install development packages
+        run: |-
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        if: env.ACT != 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Cargo Lambda
+        uses: jaxxstorm/action-install-gh-release@v1
+        with:
+          repo: cargo-lambda/cargo-lambda
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Build with Cargo Lambda
+        run: |-
+          cargo lambda build --release --arm64 --package lambda --output-format zip
+
+      - name: Calculate MD5 sum
+        id: calculate-md5
+        run: |-
+          MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          echo "🔍 API_BOOTSTRAP_MD5SUM calculated: $MD5SUM"
+          echo "md5sum=$MD5SUM" >> $GITHUB_OUTPUT
+
+  generateMatrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          # Convert CSV regions to JSON array
+          regions="${{ vars.DEPLOY_REGIONS }}"
+          json_array="["
+          IFS=',' read -ra REGIONS <<< "$regions"
+          for i in "${!REGIONS[@]}"; do
+            if [ $i -gt 0 ]; then json_array+=","; fi
+            json_array+="\"${REGIONS[i]}\""
+          done
+          json_array+="]"
+          echo "🔍 Generated matrix: {\"region\":$json_array}"
+          echo "matrix={\"region\":$json_array}" >> $GITHUB_OUTPUT
+
+  bootstrap-infra:
+    runs-on: ubuntu-latest
+    needs: [check-prerequisites, generateMatrix]
+    strategy:
+      matrix: ${{ fromJson(needs.generateMatrix.outputs.matrix) }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
+        run: |-
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
+      - name: Create deployment assets bucket and generate outputs
+        id: create-bucket
+        run: |-
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="cloudformation-deployment-assets-${ACCOUNT_ID}-${{ matrix.region }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_PATH_PREFIX="/bootstrap/${TIMESTAMP}"
+
+          echo "Checking if bucket ${BUCKET_NAME} exists..."
+          if aws s3 ls "s3://${BUCKET_NAME}" > /dev/null 2>&1; then
+            echo "Bucket ${BUCKET_NAME} already exists"
+
+            # Verify bucket ownership using expected-bucket-owner
+            echo "Verifying bucket ownership..."
+            if aws s3api get-bucket-location --bucket "${BUCKET_NAME}" --expected-bucket-owner "${ACCOUNT_ID}" > /dev/null 2>&1; then
+              echo "✅ Bucket ownership verified - bucket is owned by account ${ACCOUNT_ID}"
+            else
+              echo "❌ ERROR: Bucket ${BUCKET_NAME} exists but is not owned by account ${ACCOUNT_ID}"
+              echo "🚨🚨🚨 Bucket Collision Detected! 🚨🚨🚨"
+              exit 1
+            fi
+          else
+            echo "Creating bucket ${BUCKET_NAME} in ${{ matrix.region }}..."
+            aws s3 mb "s3://${BUCKET_NAME}" --region ${{ matrix.region }}
+
+            echo "Bucket ${BUCKET_NAME} created successfully"
+            echo "DEBUG - NOOP"
+          fi
 
   upload:
-    needs: build
+    needs: [build, generateMatrix, bootstrap-infra]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
     strategy:
-      matrix:
-        region:
-          - us-west-2
-          - us-east-1
+      matrix: ${{ fromJson(needs.generateMatrix.outputs.matrix) }}
     steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: ${{ matrix.region }}
+          mask-aws-account-id: true
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
+        run: |-
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
       - name: Upload assets to regional backend deployment asset buckets
         run: |-
-          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          API_BOOTSTRAP_MD5SUM="${{ needs.build.outputs.api-bootstrap-md5sum }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
           aws s3 ls "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-${{matrix.region}}/backend/api/bootstrap-${API_BOOTSTRAP_MD5SUM}.zip" > /dev/null && \
@@ -45,24 +242,104 @@ jobs:
           aws s3 cp --sse AES256 \
             template.yaml \
             "s3://cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml"
-      
+
   deploy:
-    needs: upload
+    needs: [build, upload]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ vars.ARCHODEX_SOURCE_DIR || ''}}
     steps:
-      - name: Deploy CloudFormation stack
-        env:
-          AWS_PAGER: ""
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ARCHODEX_BACKEND_AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+          role-chaining: env.ACT == 'true'
+
+      - name: Install AWS CLI v2
         run: |-
-          API_BOOTSTRAP_MD5SUM=$(md5sum target/lambda/lambda/bootstrap.zip | awk '{print $1}')
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          rm /tmp/awscliv2.zip
+          /tmp/aws/install --update
+          rm -rf /tmp/aws/
+          aws --version
+
+      - name: Deploy CloudFormation stack
+        run: |-
+          API_BOOTSTRAP_MD5SUM="${{ needs.build.outputs.api-bootstrap-md5sum }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          aws cloudformation create-change-set \
-            --stack-name archodex-backend \
-            --change-set-name "archodex-backend-$(date +%Y-%m-%dT%H-%M-%S)" \
-            --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}"
+          echo "Starting CloudFormation deployment..."
+
+          # DEBUG
+          echo "🔍 API_BOOTSTRAP_MD5SUM calculated: $API_BOOTSTRAP_MD5SUM"
+          echo "🔍 ParameterKey=APIBootstrapMD5Sum,ParameterValue=API_BOOTSTRAP_MD5SUM"
+          # DEBUG
+
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name archodex-backend >/dev/null 2>&1; then
+            echo "Stack exists, updating..."
+            aws cloudformation update-stack \
+              --stack-name archodex-backend \
+              --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}" \
+              --disable-rollback
+          else
+            echo "Stack does not exist, creating..."
+            aws cloudformation create-stack \
+              --stack-name archodex-backend \
+              --template-url https://s3.us-west-2.amazonaws.com/cloudformation-deployment-assets-${ACCOUNT_ID}-us-west-2/backend/template.yaml \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --parameters "ParameterKey=APIBootstrapMD5Sum,ParameterValue=${API_BOOTSTRAP_MD5SUM}" \
+              --disable-rollback
+          fi
+
+          echo "Deployment command completed. Monitoring stack status..."
+
+          # Monitor stack status and events
+          LAST_EVENT_TIME=$(date -u -d '1 minute ago' '+%Y-%m-%dT%H:%M:%S')
+
+          while true; do
+            # Get current stack status
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name archodex-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
+
+            echo "Current stack status: $STACK_STATUS"
+
+            # Show recent events
+            aws cloudformation describe-stack-events \
+              --stack-name archodex-backend \
+              --query "StackEvents[?Timestamp>=\`${LAST_EVENT_TIME}\`].{Time:Timestamp,Resource:LogicalResourceId,Type:ResourceType,Status:ResourceStatus,Reason:ResourceStatusReason}" \
+              --output table 2>/dev/null || true
+
+            # Check if deployment is complete
+            case $STACK_STATUS in
+              CREATE_COMPLETE|UPDATE_COMPLETE)
+                echo "✅ CloudFormation deployment completed successfully!"
+                aws cloudformation describe-stacks --stack-name archodex-backend --query 'Stacks[0].{Status:StackStatus,LastUpdated:LastUpdatedTime}' --output table
+                break
+                ;;
+              CREATE_FAILED|UPDATE_FAILED|UPDATE_ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|DELETE_FAILED)
+                echo "❌ CloudFormation deployment failed with status: $STACK_STATUS"
+                aws cloudformation describe-stack-events \
+                  --stack-name archodex-backend \
+                  --query "StackEvents[?ResourceStatus=='CREATE_FAILED' || ResourceStatus=='UPDATE_FAILED' || ResourceStatus=='DELETE_FAILED'].{Time:Timestamp,Resource:LogicalResourceId,Status:ResourceStatus,Reason:ResourceStatusReason}" \
+                  --output table
+                exit 1
+                ;;
+              CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)
+                echo "Deployment in progress, waiting..."
+                ;;
+              STACK_NOT_FOUND)
+                echo "❌ Stack not found!"
+                exit 1
+                ;;
+              *)
+                echo "Unknown stack status: $STACK_STATUS"
+                ;;
+            esac
+
+            # Update last event time and wait
+            LAST_EVENT_TIME=$(date -u '+%Y-%m-%dT%H:%M:%S')
+            sleep 5
+          done

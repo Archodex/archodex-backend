@@ -1,92 +1,55 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "cargo",
-			"command": "build",
-			"problemMatcher": [
-				"$rustc"
-			],
-			"group": "build",
-			"label": "rust: cargo build"
-		},
-		{
-			"type": "cargo",
-			"command": "lambda",
-			"args": [
-				"build",
-				"--release",
-				"--arm64",
-				"--package",
-				"lambda",
-				"--output-format",
-				"zip"
-			],
-			"env": {
-				"PATH": "${env:PATH}:${env:HOME}/zig",
-			},
-			"problemMatcher": [
-				"$rustc"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true,
-			},
-			"label": "rust: cargo lambda build"
-		},
-		{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "cargo",
+      "command": "build",
+      "problemMatcher": ["$rustc"],
+      "group": "build",
+      "label": "rust: cargo build"
+    },
+    {
+      "type": "cargo",
+      "command": "lambda",
+      "args": [
+        "build",
+        "--release",
+        "--arm64",
+        "--package",
+        "lambda",
+        "--output-format",
+        "zip"
+      ],
+      "env": {
+        "PATH": "${env:PATH}:${env:HOME}/zig"
+      },
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "label": "rust: cargo lambda build"
+    },
+    {
       "label": "Start archodex-backend-dev pod in Kubernetes cluster",
       "type": "shell",
       "command": "kubectl apply -f .devcontainer/k8s",
       "problemMatcher": []
     },
-		{
-			"type": "process",
-			"command": "act",
-			"args": [
-				"--var",
-				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
-				"--platform",
-				"ubuntu-latest=-self-hosted",
-				"--env",
-				"AWS_PROFILE=archodex-dev-AdministratorAccess",
-				"--job",
-				"deploy",
-			],
-			"options": {
-				"env": {
-					"PATH": "${env:PATH}:${env:HOME}/bin:${env:HOME}/zig",
-				},
-			},
-			"problemMatcher": [],
-			"group": {
-				"kind": "build",
-			},
-			"label": "act: Run GitHub Actions Workflow deploy.yml locally for dev"
-		},
-		{
-			"type": "process",
-			"command": "act",
-			"args": [
-				"--var",
-				"ARCHODEX_SOURCE_DIR=${workspaceFolder}",
-				"--platform",
-				"ubuntu-latest=-self-hosted",
-				"--env",
-				"AWS_PROFILE=archodex-prod-AdministratorAccess",
-				"--job",
-				"deploy",
-			],
-			"options": {
-				"env": {
-					"PATH": "${env:PATH}:${env:HOME}/bin:${env:HOME}/zig",
-				},
-			},
-			"problemMatcher": [],
-			"group": {
-				"kind": "build",
-			},
-			"label": "act: Run GitHub Actions Workflow deploy.yml locally for prod"
-		}
-	]
+    {
+      "type": "shell",
+      "command": "GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --var DEPLOY_REGIONS=${config:archodex.DEV_REGIONS} --var ARCHODEX_ENV_NAME=${config:archodex.ARCHODEX_ENV_NAME} --env-file <(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)  --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --job deploy",
+      "options": {
+        "shell": {
+          "executable": "/bin/bash",
+          "args": ["-c"]
+        }
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build"
+      },
+      "label": "act: Run GitHub Actions Workflow deploy.yml locally for dev"
+    }
+  ]
 }
