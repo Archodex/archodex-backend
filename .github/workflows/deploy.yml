@@ -134,12 +134,20 @@ jobs:
           echo "🔍 API_BOOTSTRAP_MD5SUM calculated: $MD5SUM"
           echo "md5sum=$MD5SUM" >> $GITHUB_OUTPUT
 
-      - name: Upload build artifacts
+      - name: Upload Lambda bootstrap artifact
         if: env.ACT != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lambda-bootstrap
           path: target/lambda/lambda/bootstrap.zip
+          retention-days: 3
+
+      - name: Upload CloudFormation template artifact
+        if: env.ACT != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: template.yaml
+          path: template.yaml
           retention-days: 3
 
   generateMatrix:
@@ -222,12 +230,18 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.generateMatrix.outputs.matrix) }}
     steps:
-      - name: Download build artifacts
+      - name: Download Lambda bootstrap artifact
         if: env.ACT != 'true'
         uses: actions/download-artifact@v4
         with:
           name: lambda-bootstrap
           path: target/lambda/lambda/
+
+      - name: Download template artifact
+        if: env.ACT != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: template.yaml
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
