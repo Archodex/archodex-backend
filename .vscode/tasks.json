@@ -38,7 +38,7 @@
     },
     {
       "type": "shell",
-      "command": "GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --var DEPLOY_REGIONS=${config:archodex.DEV_REGIONS} --var ARCHODEX_ENV_NAME=${config:archodex.ARCHODEX_ENV_NAME} --env-file <(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)  --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --secret ARCHODEX_PRIVATE_SURREALDB_GITHUB_TOKEN='${config:archodex.ARCHODEX_PRIVATE_SURREALDB_GITHUB_TOKEN}' --job build",
+      "command": "GITHUB_TOKEN=$(gh auth token) && act --platform ubuntu-latest-arm64=catthehacker/ubuntu:act-latest --platform ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/arm64 --bind --var DEPLOY_REGIONS=${config:archodex.DEV_REGIONS} --var ARCHODEX_ENV_NAME=${config:archodex.ARCHODEX_ENV_NAME} --env-file <(aws configure export-credentials --format env --profile=archodex-dev-AdministratorAccess)  --secret ARCHODEX_BACKEND_AWS_ROLE_ARN='${config:archodex.ARCHODEX_BACKEND_AWS_ROLE_ARN}' --secret ARCHODEX_PRIVATE_SURREALDB_GITHUB_TOKEN='${config:archodex.ARCHODEX_PRIVATE_SURREALDB_GITHUB_TOKEN}' --job deploy",
       "options": {
         "shell": {
           "executable": "/bin/bash",
