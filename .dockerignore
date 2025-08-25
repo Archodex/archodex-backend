@@ -1,0 +1,5 @@
+# We build the image externally, then package it up. Ignore everything except
+# the build output.
+*
+
+!target/*/release/server

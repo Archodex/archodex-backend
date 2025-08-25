@@ -1,0 +1,165 @@
+name: Build Server Development Container Images
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+env:
+  ACT: false
+  AWS_PAGER: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [aarch64, x86_64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Install development packages (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: |-
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang musl-dev protobuf-compiler
+
+      - name: Install development packages (aarch64)
+        if: matrix.arch == 'aarch64'
+        run: |-
+          UBUNTU_VERSION=`lsb_release -cs`
+
+          # Add arm64 package archive sources
+          sudo tee /etc/apt/sources.list.d/ubuntu.sources > /dev/null << EOF
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu/
+          Suites: ${UBUNTU_VERSION} ${UBUNTU_VERSION}-updates ${UBUNTU_VERSION}-backports
+          Components: main universe restricted multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          Architectures: amd64
+
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu/
+          Suites: ${UBUNTU_VERSION}-security
+          Components: main universe restricted multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          Architectures: amd64
+
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports/
+          Suites: ${UBUNTU_VERSION} ${UBUNTU_VERSION}-updates ${UBUNTU_VERSION}-backports ${UBUNTU_VERSION}-security
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          EOF
+
+          # Enable the arm64 architecture
+          sudo dpkg --add-architecture arm64
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang musl-dev:arm64 protobuf-compiler
+
+      - name: Install Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          targets: ${{ matrix.arch }}-unknown-linux-musl
+          cache-target: ${{ matrix.arch }}-unknown-linux-musl/release
+
+      - name: Build Server package
+        env:
+          # ring overrides cargo's compilation settings and attempts to use gcc. But when we are cross-compiling we
+          # don't have easy access to a cross, musl gcc. Force it to use clang, just like we set in .cargo/config.toml.
+          #
+          # We also must provide the musl system include path, because otherwise clang will default to searching
+          # /usr/include which has incompatible glibc headers.
+          CC: clang
+          TARGET_CFLAGS: --target=${{ matrix.arch }}-unknown-linux-musl -I/usr/include/${{ matrix.arch }}-linux-musl
+        run: |-
+          cargo build \
+            --release \
+            --target ${{ matrix.arch }}-unknown-linux-musl \
+            --package server
+
+      - name: Container metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - name: Log in to the GitHub Container Registry
+        if: env.ACT != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push container images
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          tags: ghcr.io/${{ github.repository }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: ${{ env.ACT != 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' }}
+
+      - name: Image digest
+        run: |-
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to Docker Hub
+        if: env.ACT != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels) for container images
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=ref,event=branch,prefix=branch-
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
