@@ -107,7 +107,7 @@ jobs:
         with:
           context: .
           platforms: linux/${{ matrix.arch }}
-          tags: ghcr.io/${{ github.repository }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: ${{ env.ACT != 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' }}
 
@@ -157,9 +157,10 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
+          OCI_REPO=ghcr.io/${GITHUB_REPOSITORY@L}
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+            $(printf "${OCI_REPO}@sha256:%s " *)
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ steps.meta.outputs.tags }}
