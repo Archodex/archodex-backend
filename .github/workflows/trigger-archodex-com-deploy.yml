@@ -1,0 +1,38 @@
+name: Trigger archodex.com Backend Deployment
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+env:
+  ARCHODEX_COM_TRIGGER_TOKEN_EXISTS: ${{ secrets.ARCHODEX_COM_TRIGGER_TOKEN != '' }}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to infra repo
+        if: ${{ env.ARCHODEX_COM_TRIGGER_TOKEN_EXISTS == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ARCHODEX_COM_TRIGGER_TOKEN }}
+          script: |
+            // 1) Check if the infra repo exists. If not, no-op.
+            try {
+              await github.request('GET /repos/${{ github.repository_owner }}/archodex-backend-frontend-infra');
+            } catch (e) {
+              core.notice(`No infra repo "${target}" found. Skipping.`);
+              return;
+            }
+
+            // 2) Send repository_dispatch with backend provenance
+            await github.request('POST /repos/${{ github.repository_owner }}/archodex-backend-frontend-infra/dispatches', {
+              event_type: 'archodex-backend-main-push',
+              client_payload: {
+                backend_sha: '${{ github.sha }}',
+                triggered_by: '${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              }
+            });
+            core.notice('Dispatched "archodex-backend-main-push" to ${{ github.repository_owner }}/archodex-backend-frontend-infra.');
