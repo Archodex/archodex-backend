@@ -91,6 +91,7 @@ jobs:
             --package server
 
       - name: Container metadata
+        if: env.ACT != 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -118,8 +119,8 @@ jobs:
           context: .
           platforms: linux/${{ matrix.arch }}
           tags: ${{ env.OCI_REPO }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: ${{ env.ACT != 'true' && 'type=image,push-by-digest=true,name-canonical=true,push=true' }}
+          labels: ${{ env.ACT != 'true' && steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ env.ACT != 'true' }}
 
       - name: Image digest
         run: |-

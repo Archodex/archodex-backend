@@ -2,9 +2,9 @@ use std::include_str;
 
 use anyhow::Context as _;
 use surrealdb::{
-    engine::any::Any,
-    opt::{capabilities::Capabilities, Config},
     Surreal,
+    engine::any::Any,
+    opt::{Config, capabilities::Capabilities},
 };
 use tracing::info;
 

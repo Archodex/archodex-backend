@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::{collections::HashSet, ops::Deref, sync::LazyLock};
 
 use reqwest::Url;
 
@@ -24,10 +24,11 @@ pub struct Env {
     cognito_redirect_uri: String,
     cognito_refresh_token_validity_in_days: u16,
     app_redirect_uri: Url,
+    cors_allowed_origin_suffixes: HashSet<String>,
 }
 
 impl Env {
-    pub(crate) fn get() -> &'static Self {
+    fn get() -> &'static Self {
         static ENV: LazyLock<Env> = LazyLock::new(|| {
             let mode = match std::env::var("ARCHODEX_DEV_MODE") {
                 Ok(dev_mode) => match dev_mode.as_str() {
@@ -88,6 +89,33 @@ impl Env {
 
             let endpoint = std::env::var("ENDPOINT").expect("Missing ENDPOINT env var");
 
+            let cognito_auth_endpoint = std::env::var("COGNITO_AUTH_ENDPOINT")
+                .unwrap_or_else(|_| "https://auth.archodex.com".to_string());
+
+            let mut cors_allowed_origin_suffixes = HashSet::from([
+                "https://app.archodex.com".to_string(),
+                "http://localhost:5173".to_string(),
+            ]);
+
+            if cognito_auth_endpoint != "https://auth.archodex.com" {
+                let url = Url::parse(&cognito_auth_endpoint)
+                    .expect("Failed to parse COGNITO_AUTH_ENDPOINT as a URL");
+
+                let second_level_domain = url
+                    .host_str()
+                    .and_then(|host| {
+                        let parts: Vec<&str> = host.rsplitn(2, '.').collect();
+                        if parts.len() >= 2 {
+                            Some(format!("{}.{}", parts[1], parts[0]))
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Failed to extract second-level domain from COGNITO_AUTH_ENDPOINT");
+
+                cors_allowed_origin_suffixes.insert(second_level_domain);
+            }
+
             Env {
                 mode,
                 port,
@@ -124,6 +152,7 @@ impl Env {
                     }),
                 )
                 .expect("Failed to parse env var APP_REDIRECT_URI as a URL"),
+                cors_allowed_origin_suffixes,
             }
         });
 
@@ -197,6 +226,10 @@ impl Env {
         } else {
             &Self::get().app_redirect_uri
         }
+    }
+
+    pub(crate) fn cors_allowed_origin_suffixes() -> &'static HashSet<String> {
+        &Self::get().cors_allowed_origin_suffixes
     }
 
     pub(crate) async fn api_private_key() -> &'static aes_gcm::Key<aes_gcm::Aes128Gcm> {

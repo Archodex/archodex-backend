@@ -1,5 +1,6 @@
 [workspace]
 members = ["server", "lambda"]
+default-members = ["server", "migrator"]
 
 [workspace.package]
 version = "0.1.0"
