@@ -147,11 +147,10 @@ pub(crate) async fn dashboard_auth(
         unauthorized!();
     };
 
-    let cognito_issuer_endpoint = Env::cognito_issuer_endpoint();
     let cognito_user_pool_id = Env::cognito_user_pool_id();
     let cognito_client_id = Env::cognito_client_id();
 
-    let jwks_issuer = format!("{cognito_issuer_endpoint}/{cognito_user_pool_id}");
+    let jwks_issuer = format!("https://cognito-idp.us-west-2.amazonaws.com/{cognito_user_pool_id}");
 
     let (jwk_set, verifier_map) = jwks(&jwks_issuer).await;
 

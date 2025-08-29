@@ -17,7 +17,6 @@ pub struct Env {
     surrealdb_url: String,
     surrealdb_creds: Option<surrealdb::opt::auth::Root<'static>>,
     endpoint: String,
-    cognito_issuer_endpoint: String,
     cognito_user_pool_id: String,
     cognito_client_id: String,
     cognito_auth_endpoint: Url,
@@ -127,8 +126,6 @@ impl Env {
                 surrealdb_url,
                 surrealdb_creds,
                 endpoint: endpoint.clone(),
-                cognito_issuer_endpoint: std::env::var("COGNITO_ISSUER_ENDPOINT")
-                    .unwrap_or_else(|_| "https://cognito-idp.us-west-2.amazonaws.com".to_string()),
                 cognito_user_pool_id: std::env::var("COGNITO_USER_POOL_ID")
                     .unwrap_or_else(|_| "us-west-2_Mf1K95El6".to_string()),
                 cognito_client_id: std::env::var("COGNITO_CLIENT_ID")
@@ -182,10 +179,6 @@ impl Env {
 
     pub(crate) fn endpoint() -> &'static str {
         Self::get().endpoint.as_str()
-    }
-
-    pub(crate) fn cognito_issuer_endpoint() -> &'static str {
-        Self::get().cognito_issuer_endpoint.as_str()
     }
 
     pub(crate) fn cognito_user_pool_id() -> &'static str {
