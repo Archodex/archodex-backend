@@ -179,7 +179,6 @@ name = "archodex-backend"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
- "anyhow",
  "archodex-com",
  "archodex-error",
  "axum",
@@ -208,7 +207,6 @@ name = "archodex-com"
 version = "1.0.0+71152cbf873b124bedbb7c35ae3c0b1fc79019ec"
 dependencies = [
  "aes-gcm",
- "anyhow",
  "archodex-error",
  "aws-config",
  "aws-sdk-cloudwatch",

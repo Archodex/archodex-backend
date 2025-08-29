@@ -1,9 +1,8 @@
-use anyhow::Context;
 use axum::{
-    extract::Query,
-    http::{header, StatusCode},
-    response::{AppendHeaders, IntoResponse},
     Json,
+    extract::Query,
+    http::{StatusCode, header},
+    response::{AppendHeaders, IntoResponse},
 };
 use axum_extra::extract::CookieJar;
 use base64::Engine;
@@ -11,9 +10,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use archodex_error::{anyhow, ensure};
+use archodex_error::anyhow::{self, Context as _, anyhow, ensure};
 
-use crate::{env::Env, PublicError, Result};
+use crate::{PublicError, Result, env::Env};
 
 #[derive(Deserialize)]
 pub(crate) struct IdpResponseQueryParams {
@@ -86,7 +85,9 @@ async fn idp_response(
     let refresh_token_exp =
         Utc::now() + chrono::Duration::days(refresh_token_validity_in_days as i64);
 
-    info!("Decoded access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}");
+    info!(
+        "Decoded access token with expiration {access_token_exp}, and refresh token with expiration {refresh_token_exp}"
+    );
 
     let mut app_redirect_uri = Env::app_redirect_uri(is_local_dev).clone();
     app_redirect_uri
@@ -105,7 +106,9 @@ async fn idp_response(
         AppendHeaders([
             (
                 header::SET_COOKIE,
-                format!("accessToken={access_token}; HttpOnly; Path=/; SameSite={same_site}; Secure"),
+                format!(
+                    "accessToken={access_token}; HttpOnly; Path=/; SameSite={same_site}; Secure"
+                ),
             ),
             (
                 header::SET_COOKIE,

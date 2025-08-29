@@ -9,7 +9,7 @@ use crate::{
     next_binding, surrealdb_deserializers,
     user::User,
 };
-use archodex_error::{anyhow, bail};
+use archodex_error::anyhow::{self, bail};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct ServiceDataLocation {

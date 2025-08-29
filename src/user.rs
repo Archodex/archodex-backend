@@ -2,13 +2,14 @@ use serde::{Deserialize, Serialize};
 use surrealdb::Uuid;
 
 use crate::{
+    Result,
     account::Account,
-    db::{accounts_db, QueryCheckFirstRealError},
-    surrealdb_deserializers, Result,
+    db::{QueryCheckFirstRealError, accounts_db},
+    surrealdb_deserializers,
 };
 
 #[cfg(feature = "archodex-com")]
-use archodex_error::anyhow;
+use archodex_error::anyhow::anyhow;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct User {

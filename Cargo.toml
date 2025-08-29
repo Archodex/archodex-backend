@@ -39,7 +39,6 @@ archodex-com = ["dep:archodex-com"]
 
 [dependencies]
 aes-gcm.workspace = true
-anyhow.workspace = true
 archodex-com = { path = "archodex-com", optional = true }
 archodex-error.workspace = true
 axum.workspace = true

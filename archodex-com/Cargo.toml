@@ -17,7 +17,6 @@ flate2 = "1.1.2"
 
 [dependencies]
 aes-gcm.workspace = true
-anyhow.workspace = true
 archodex-error.workspace = true
 axum.workspace = true
 aws-config.workspace = true

@@ -1,9 +1,9 @@
-use anyhow::Context;
+use anyhow::Context as _;
 use axum::{
+    Json,
     body::Body,
     http::{Response, StatusCode},
     response::IntoResponse,
-    Json,
 };
 use serde::Serialize;
 use tracing::error;
@@ -95,13 +95,13 @@ where
 #[macro_export]
 macro_rules! bad_request {
         ($msg:literal $(,)?) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::BAD_REQUEST,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::BAD_REQUEST,
                 format!($fmt, $($arg)*),
             ))
@@ -110,24 +110,24 @@ macro_rules! bad_request {
 
 #[macro_export]
 macro_rules! unauthorized {
-        () => {
-            bail!($crate::PublicError::new(
-                ::axum::http::StatusCode::UNAUTHORIZED,
-                "Unauthorized",
-            ))
-        };
-    }
+    () => {
+        $crate::bail!($crate::PublicError::new(
+            ::axum::http::StatusCode::UNAUTHORIZED,
+            "Unauthorized",
+        ))
+    };
+}
 
 #[macro_export]
 macro_rules! forbidden {
         ($msg:literal $(,)?) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::FORBIDDEN,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::FORBIDDEN,
                 format!($fmt, $($arg)*),
             ))
@@ -137,13 +137,13 @@ macro_rules! forbidden {
 #[macro_export]
 macro_rules! not_found {
         ($msg:literal $(,)?) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::NOT_FOUND,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::NOT_FOUND,
                 format!($fmt, $($arg)*),
             ))
@@ -153,37 +153,42 @@ macro_rules! not_found {
 #[macro_export]
 macro_rules! conflict {
         ($msg:literal $(,)?) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::CONFLICT,
                 format!($msg),
             ))
         };
         ($fmt:expr, $($arg:tt)*) => {
-            bail!($crate::PublicError::new(
+            $crate::bail!($crate::PublicError::new(
                 ::axum::http::StatusCode::CONFLICT,
                 format!($fmt, $($arg)*),
             ))
         };
     }
 
-// Re-implement anyhow macros to work with above error types
-pub use anyhow::anyhow;
+pub mod anyhow {
+    pub use anyhow::Context;
+    pub use anyhow::Error;
+    pub use anyhow::Ok;
+    pub use anyhow::Result;
+    pub use anyhow::anyhow;
 
-#[macro_export]
-macro_rules! bail {
+    #[macro_export]
+    macro_rules! bail {
         ($msg:literal $(,)?) => {
-            return Err(anyhow!($msg).into())
+            return Err(archodex_error::anyhow::anyhow!($msg).into())
         };
         ($err:expr $(,)?) => {
-            return Err(anyhow!($err).into())
+            return Err(archodex_error::anyhow::anyhow!($err).into())
         };
         ($fmt:expr, $($arg:tt)*) => {
-            return Err(anyhow!($fmt, $($arg)*).into())
+            return Err(archodex_error::anyhow::anyhow!($fmt, $($arg)*).into())
         };
     }
+    pub use bail;
 
-#[macro_export]
-macro_rules! ensure {
+    #[macro_export]
+    macro_rules! ensure {
         ($cond:expr $(,)?) => {
             if !$cond {
                 $crate::bail!(concat!("Condition failed: `", stringify!($cond), "`"))
@@ -204,4 +209,6 @@ macro_rules! ensure {
                 $crate::bail!($fmt, $($arg)*);
             }
         };
+    }
+    pub use ensure;
 }

@@ -1,23 +1,22 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use anyhow::Context;
-use axum::{extract::Request, middleware::Next, response::Response, Extension};
+use axum::{Extension, extract::Request, middleware::Next, response::Response};
 use surrealdb::{
-    engine::any::Any,
-    opt::{capabilities::Capabilities, Config},
-    sql::statements::CommitStatement,
     Surreal,
+    engine::any::Any,
+    opt::{Config, capabilities::Capabilities},
+    sql::statements::CommitStatement,
 };
 use tokio::sync::{OnceCell, RwLock};
 use tracing::{info, warn};
 
 use crate::{
+    Result,
     account::{Account, AccountQueries},
     auth::AccountAuth,
     env::Env,
-    Result,
 };
-use archodex_error::{anyhow, bail};
+use archodex_error::anyhow::{self, Context as _, anyhow, bail};
 
 #[derive(Default)]
 pub(crate) struct BeginReadonlyStatement;
@@ -43,7 +42,9 @@ pub(crate) async fn migrate_service_data_database(
     service_data_surrealdb_url: &str,
     archodex_account_id: &str,
 ) -> anyhow::Result<()> {
-    info!("Migrating 'resources' database for account {archodex_account_id} at URL {service_data_surrealdb_url}...",);
+    info!(
+        "Migrating 'resources' database for account {archodex_account_id} at URL {service_data_surrealdb_url}...",
+    );
 
     // We can migrate using the backend API role and the resource policy set
     // above. But the resource policy can take 30+ seconds to propagate.
@@ -60,7 +61,9 @@ pub(crate) async fn migrate_service_data_database(
         .await
         .with_context(|| format!("Failed to migrate 'resources' database for URL {service_data_surrealdb_url} for account {archodex_account_id}"))?;
 
-    info!("SurrealDB Database at {service_data_surrealdb_url} for account {archodex_account_id} migrated and ready for use");
+    info!(
+        "SurrealDB Database at {service_data_surrealdb_url} for account {archodex_account_id} migrated and ready for use"
+    );
 
     Ok(())
 }

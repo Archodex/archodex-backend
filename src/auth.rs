@@ -1,6 +1,5 @@
 use std::{collections::HashMap, time::SystemTime};
 
-use anyhow::{anyhow, Context};
 use axum::{
     extract::{Path, Request},
     middleware::Next,
@@ -8,22 +7,26 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use josekit::{
+    JoseError,
     jwk::JwkSet,
     jws::alg::rsassa::{RsassaJwsAlgorithm, RsassaJwsVerifier},
-    jwt, JoseError,
+    jwt,
 };
 use reqwest::header::AUTHORIZATION;
-use surrealdb::{engine::any::Any, sql::statements::CommitStatement, Surreal, Uuid};
+use surrealdb::{Surreal, Uuid, engine::any::Any, sql::statements::CommitStatement};
 use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
-use archodex_error::{bail, unauthorized};
 use crate::{
-    db::{accounts_db, BeginReadonlyStatement, QueryCheckFirstRealError},
+    Result,
+    db::{BeginReadonlyStatement, QueryCheckFirstRealError, accounts_db},
     env::Env,
     report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
-    Result,
+};
+use archodex_error::{
+    anyhow::{Context as _, anyhow},
+    unauthorized,
 };
 
 static JWK_SET: OnceCell<(JwkSet, HashMap<String, RsassaJwsVerifier>)> = OnceCell::const_new();

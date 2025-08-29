@@ -1,19 +1,18 @@
-use anyhow::Context;
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 
 #[cfg(not(feature = "archodex-com"))]
-use surrealdb::{engine::any::Any, Surreal};
+use surrealdb::{Surreal, engine::any::Any};
 
-use archodex_error::{anyhow, bail, conflict};
+use archodex_error::{anyhow::Context as _, conflict};
 
 use crate::{
+    Result,
     account::{Account, AccountPublic, AccountQueries},
     auth::DashboardAuth,
-    db::{accounts_db, QueryCheckFirstRealError},
+    db::{QueryCheckFirstRealError, accounts_db},
     env::Env,
-    Result,
 };
 
 #[derive(Serialize)]

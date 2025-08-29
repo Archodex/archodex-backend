@@ -1,23 +1,25 @@
 use std::collections::HashMap;
 
-use anyhow::Context;
-use axum::{extract::Path, Extension, Json};
+use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
 use surrealdb::{
+    Surreal,
     engine::any::Any,
     sql::statements::{BeginStatement, CommitStatement},
-    Surreal,
 };
 use tracing::info;
 
-use archodex_error::{anyhow, bad_request, bail, not_found};
+use archodex_error::{
+    anyhow::{Context as _, anyhow, bail},
+    bad_request, not_found,
+};
 
 use crate::{
+    Result,
     account::{Account, AccountQueries},
     auth::{AccountAuth, DashboardAuth},
-    db::{accounts_db, BeginReadonlyStatement, QueryCheckFirstRealError},
+    db::{BeginReadonlyStatement, QueryCheckFirstRealError, accounts_db},
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
-    Result,
 };
 
 #[derive(Serialize)]
