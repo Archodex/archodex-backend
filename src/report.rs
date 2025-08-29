@@ -5,19 +5,19 @@ use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use surrealdb::{
+    Surreal,
     engine::any::Any,
     method::Query,
     sql::statements::{BeginStatement, CommitStatement, InsertStatement, UpdateStatement},
-    Surreal,
 };
 use tracing::info;
 
 use crate::{
+    Result,
     db::QueryCheckFirstRealError,
     next_binding,
-    resource::{surrealdb_thing_from_resource_id, ResourceId, ResourceIdPart},
+    resource::{ResourceId, ResourceIdPart, surrealdb_thing_from_resource_id},
     value::surrealdb_value_from_json_value,
-    Result,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -125,32 +125,31 @@ fn upsert_resource_tree_node<'a>(
 
     query = query.query(resource_upsert);
 
-    if let Some(attributes) = resource_tree_node.attributes {
-        if !attributes.is_empty() {
-            // UPDATE resource:<id> MERGE { attributes: <attributes> } RETURN NONE
-            let mut resource_attributes_merge = UpdateStatement::default();
+    if let Some(attributes) = resource_tree_node.attributes
+        && !attributes.is_empty()
+    {
+        // UPDATE resource:<id> MERGE { attributes: <attributes> } RETURN NONE
+        let mut resource_attributes_merge = UpdateStatement::default();
 
-            resource_attributes_merge.what = vec![surrealdb::sql::Thing::from((
-                "resource",
-                surrealdb::sql::Id::from(prefix.clone()),
-            ))
-            .into()]
-            .into();
+        resource_attributes_merge.what = vec![
+            surrealdb::sql::Thing::from(("resource", surrealdb::sql::Id::from(prefix.clone())))
+                .into(),
+        ]
+        .into();
 
-            let mut merge_data = surrealdb::sql::Object::default();
-            merge_data.insert(
-                "attributes".to_string(),
-                surrealdb_value_from_json_value(attributes.into()),
-            );
-            resource_attributes_merge.data =
-                Some(surrealdb::sql::Data::MergeExpression(merge_data.into()));
+        let mut merge_data = surrealdb::sql::Object::default();
+        merge_data.insert(
+            "attributes".to_string(),
+            surrealdb_value_from_json_value(attributes.into()),
+        );
+        resource_attributes_merge.data =
+            Some(surrealdb::sql::Data::MergeExpression(merge_data.into()));
 
-            resource_attributes_merge.output = Some(surrealdb::sql::Output::None);
+        resource_attributes_merge.output = Some(surrealdb::sql::Output::None);
 
-            info!("Resource attributes merge: {resource_attributes_merge}");
+        info!("Resource attributes merge: {resource_attributes_merge}");
 
-            query = query.query(resource_attributes_merge);
-        }
+        query = query.query(resource_attributes_merge);
     }
 
     if let Some(children) = resource_tree_node.contains {
