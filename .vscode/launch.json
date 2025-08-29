@@ -7,77 +7,6 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'server' in local dev mode",
-      "cargo": {
-        "args": [
-          "build",
-          "--bin=server",
-          "--package=server"
-        ],
-        "filter": {
-          "name": "server",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "ARCHODEX_DEV_MODE": "local",
-        "AWS_PROFILE": "archodex-dev-local",
-        "COLORTERM": "truecolor",
-        "AWS_PARTITION": "aws",
-        "AWS_REGION": "us-west-2",
-        "AWS_ACCOUNT_ID": "${config:archodex.AWS_ACCOUNT_ID}",
-        "CUSTOMER_DATA_OU_ID": "${config:archodex.CUSTOMER_DATA_OU_ID}",
-        "ENDPOINT": "http://archodex-backend-dev:5731",
-        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_ENV_NAME}.dev.servicearch.com",
-        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
-        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
-        "COGNITO_REDIRECT_URI": "http://localhost:5731/oauth2/idpresponse",
-        "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS": "1",
-        "COGNITO_ISSUER_ENDPOINT": "https://cognito-idp.us-west-2.amazonaws.com",
-        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
-      },
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug executable 'server' in remote dev mode",
-      "cargo": {
-        "args": [
-          "build",
-          "--bin=server",
-          "--package=server"
-        ],
-        "filter": {
-          "name": "server",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "ARCHODEX_DEV_MODE": "remote",
-        "AWS_PROFILE": "archodex-dev-local",
-        "COLORTERM": "truecolor",
-        "AWS_PARTITION": "aws",
-        "AWS_REGION": "us-west-2",
-        "AWS_ACCOUNT_ID": "891376912002",
-        "CUSTOMER_DATA_OU_ID": "ou-ijio-06qqr2r8",
-        "COGNITO_AWS_PROFILE": "archodex-dev-AdministratorAccess",
-        "ENDPOINT": "https://api.us-west-2.chase.dev.servicearch.com",
-        "COGNITO_AUTH_ENDPOINT": "https://auth.chase.dev.servicearch.com",
-        "COGNITO_USER_POOL_ID": "us-west-2_977GUSnal",
-        "COGNITO_CLIENT_ID": "3r0ibjo8ibf3q2r4u1aau8m8cj",
-        "COGNITO_REDIRECT_URI": "http://localhost:5731/oauth2/idpresponse",
-        "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS": "1",
-        "COGNITO_ISSUER_ENDPOINT": "https://cognito-idp.us-west-2.amazonaws.com",
-        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
-      }
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
       "name": "Debug local backend server",
       "cargo": {
         "args": [
@@ -93,30 +22,36 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
-        "ARCHODEX_DEV_MODE": "local",
         "COLORTERM": "truecolor",
         "ENDPOINT": "http://localhost:5732",
-        "SURREALDB_URL": "${config:archodex.LOCAL_SURREALDB_URL}",
-        "SURREALDB_USERNAME": "${config:archodex.LOCAL_SURREALDB_USERNAME}",
-        "SURREALDB_PASSWORD": "${config:archodex.LOCAL_SURREALDB_PASSWORD}",
-        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_DOMAIN}",
+        "RUST_BACKTRACE": "1",
+        // Uncomment and modify to set a different log filter
+        // (https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives)
+        //"RUST_LOG": "info",
+        // The following must be set in your VS Code user settings
+        "SURREALDB_URL": "${config:archodex.SURREALDB_URL}",
+        // The following are required unless you are using anonymous access with a local SurrealDB service
+        "SURREALDB_USERNAME": "${config:archodex.SURREALDB_USERNAME}",
+        "SURREALDB_PASSWORD": "${config:archodex.SURREALDB_PASSWORD}",
+        // Set LOCAL_FRONTEND to "true" to use a local development archodex-frontend environment
+        "LOCAL_FRONTEND": "${config:archodex.LOCAL_FRONTEND}",
+        // The following are optional values that are typically only used by Archodex.com developers
+        "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
         "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
         "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
-        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
-        "RUST_BACKTRACE": "1",
       },
     },
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug archodex-com backend server",
+      "name": "Debug archodex.com managed backend server",
       "cargo": {
         "args": [
           "build",
           "--bin=server",
           "--package=server",
           "--features=archodex-com",
-          "--config=patch.crates-io.surrealdb.git='https://github.com/Archodex/surrealdb.git'",
+          "${config:archodex.ARCHODEX_COM_ADDITIONAL_BUILD_FLAG}"
         ],
         "filter": {
           "name": "server",
@@ -126,120 +61,25 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": {
-        "ARCHODEX_DEV_MODE": "local",
-        "AWS_PROFILE": "archodex-dev-AdministratorAccess",
         "COLORTERM": "truecolor",
-        "CUSTOMER_DATA_OU_ID": "${config:archodex.CUSTOMER_DATA_OU_ID}",
         "ENDPOINT": "http://localhost:5731",
+        "RUST_BACKTRACE": "1",
+        // Uncomment and modify to set a different log filter
+        // (https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives)
+        //"RUST_LOG": "info",
+        // The following must be set in your VS Code user settings
         "ACCOUNTS_SURREALDB_URL": "${config:archodex.ARCHODEX_COM_SURREALDB_URL}",
-        "SURREALDB_USERNAME": "${config:archodex.ARCHODEX_COM_SURREALDB_USERNAME}",
-        "SURREALDB_PASSWORD": "${config:archodex.ARCHODEX_COM_SURREALDB_PASSWORD}",
-        "COGNITO_AUTH_ENDPOINT": "https://auth.${config:archodex.ARCHODEX_ENV_NAME}.dev.servicearch.com",
+        "AWS_PROFILE": "${config:archodex.ARCHODEX_COM_AWS_PROFILE}",
+        "CUSTOMER_DATA_OU_ID": "${config:archodex.ARCHODEX_COM_CUSTOMER_DATA_OU_ID}",
+        // Set LOCAL_FRONTEND to "true" to use a local development archodex-frontend environment
+        "LOCAL_FRONTEND": "${config:archodex.LOCAL_FRONTEND}",
+        // Optionally set the following values in your VS Code user settings as needed
+        "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
         "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
         "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
-        "APP_REDIRECT_URI": "http://localhost:5173/oauth2/idpresponse",
-        "RUST_BACKTRACE": "1",
+        // Optionally set the following to "local" for local development mode
+        "ARCHODEX_DEV_MODE": "${config:archodex.ARCHODEX_COM_DEV_MODE}",
       },
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug executable 'migrator' in local dev mode",
-      "cargo": {
-        "args": [
-          "build",
-          "--bin=migrator",
-          "--package=migrator"
-        ],
-        "filter": {
-          "name": "migrator",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "AWS_REGION": "us-west-2",
-        "AWS_ACCESS_KEY_ID": "invalid",
-        "AWS_SECRET_ACCESS_KEY": "invalid",
-        "AWS_ENDPOINT_URL": "http://localhost:8001",
-        "COLORTERM": "truecolor",
-      },
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in executable 'server'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=server",
-          "--package=server"
-        ],
-        "filter": {
-          "name": "server",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in library 'archodex-backend'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=archodex-backend"
-        ],
-        "filter": {
-          "name": "archodex-backend",
-          "kind": "lib"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug executable 'lambda'",
-      "cargo": {
-        "args": [
-          "build",
-          "--bin=lambda",
-          "--package=lambda"
-        ],
-        "filter": {
-          "name": "lambda",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in executable 'lambda'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=lambda",
-          "--package=lambda"
-        ],
-        "filter": {
-          "name": "lambda",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
     }
   ]
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref, sync::LazyLock};
+use std::{ops::Deref, sync::LazyLock};
 
 use reqwest::Url;
 
@@ -12,6 +12,7 @@ pub(crate) enum Mode {
 pub struct Env {
     mode: Mode,
     port: u16,
+    archodex_domain: String,
     accounts_surrealdb_url: String,
     #[cfg(not(feature = "archodex-com"))]
     surrealdb_url: String,
@@ -23,7 +24,6 @@ pub struct Env {
     cognito_redirect_uri: String,
     cognito_refresh_token_validity_in_days: u16,
     app_redirect_uri: Url,
-    cors_allowed_origin_suffixes: HashSet<String>,
 }
 
 impl Env {
@@ -54,6 +54,10 @@ impl Env {
                 .parse::<u16>()
                 .expect("Failed to parse PORT env var as u16");
 
+            let archodex_domain = env_with_default_for_empty("ARCHODEX_DOMAIN", "archodex.com");
+
+            let endpoint = std::env::var("ENDPOINT").expect("Missing ENDPOINT env var");
+
             #[cfg(not(feature = "archodex-com"))]
             let (_, surrealdb_url) = (
                 std::env::var("ACCOUNTS_SURREALDB_URL").expect_err(
@@ -70,8 +74,20 @@ impl Env {
                     .expect_err("SURREALDB_URL env var should not be set in archodex-com builds"),
             );
 
-            let surrealdb_username = std::env::var("SURREALDB_USERNAME").ok();
-            let surrealdb_password = std::env::var("SURREALDB_PASSWORD").ok();
+            let surrealdb_username = match std::env::var("SURREALDB_USERNAME") {
+                Ok(surrealdb_username) if !surrealdb_username.is_empty() => {
+                    Some(surrealdb_username)
+                }
+                Ok(_) | Err(std::env::VarError::NotPresent) => None,
+                Err(err) => panic!("Invalid SURREALDB_USERNAME env var: {err:?}"),
+            };
+            let surrealdb_password = match std::env::var("SURREALDB_PASSWORD") {
+                Ok(surrealdb_password) if !surrealdb_password.is_empty() => {
+                    Some(surrealdb_password)
+                }
+                Ok(_) | Err(std::env::VarError::NotPresent) => None,
+                Err(err) => panic!("Invalid SURREALDB_PASSWORD env var: {err:?}"),
+            };
 
             let surrealdb_creds = match (surrealdb_username, surrealdb_password) {
                 (Some(surrealdb_username), Some(surrealdb_password)) => {
@@ -86,38 +102,22 @@ impl Env {
                 ),
             };
 
-            let endpoint = std::env::var("ENDPOINT").expect("Missing ENDPOINT env var");
-
-            let cognito_auth_endpoint = std::env::var("COGNITO_AUTH_ENDPOINT")
-                .unwrap_or_else(|_| "https://auth.archodex.com".to_string());
-
-            let mut cors_allowed_origin_suffixes = HashSet::from([
-                "https://app.archodex.com".to_string(),
-                "http://localhost:5173".to_string(),
-            ]);
-
-            if cognito_auth_endpoint != "https://auth.archodex.com" {
-                let url = Url::parse(&cognito_auth_endpoint)
-                    .expect("Failed to parse COGNITO_AUTH_ENDPOINT as a URL");
-
-                let second_level_domain = url
-                    .host_str()
-                    .and_then(|host| {
-                        let parts: Vec<&str> = host.rsplitn(2, '.').collect();
-                        if parts.len() >= 2 {
-                            Some(format!("{}.{}", parts[1], parts[0]))
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("Failed to extract second-level domain from COGNITO_AUTH_ENDPOINT");
-
-                cors_allowed_origin_suffixes.insert(second_level_domain);
-            }
+            let app_redirect_uri = match std::env::var("LOCAL_FRONTEND") {
+                Ok(local_frontend) if local_frontend.to_lowercase() == "true" => {
+                    Url::parse("http://localhost:5173/oauth2/idpresponse")
+                        .expect("Failed to parse local frontend redirect URL")
+                }
+                Ok(_) | Err(std::env::VarError::NotPresent) => {
+                    Url::parse(&format!("https://app.{archodex_domain}/oauth2/idpresponse"))
+                        .expect("Failed to parse default app redirect URL")
+                }
+                Err(err) => panic!("Invalid LOCAL_FRONTEND env var: {err:?}"),
+            };
 
             Env {
                 mode,
                 port,
+                archodex_domain: archodex_domain.clone(),
                 #[cfg(feature = "archodex-com")]
                 accounts_surrealdb_url,
                 #[cfg(not(feature = "archodex-com"))]
@@ -126,30 +126,27 @@ impl Env {
                 surrealdb_url,
                 surrealdb_creds,
                 endpoint: endpoint.clone(),
-                cognito_user_pool_id: std::env::var("COGNITO_USER_POOL_ID")
-                    .unwrap_or_else(|_| "us-west-2_Mf1K95El6".to_string()),
-                cognito_client_id: std::env::var("COGNITO_CLIENT_ID")
-                    .unwrap_or_else(|_| "1a5vsre47o6pa39p3p81igfken".to_string()),
-                cognito_auth_endpoint: Url::parse(
-                    &std::env::var("COGNITO_AUTH_ENDPOINT")
-                        .unwrap_or_else(|_| "https://auth.archodex.com".to_string()),
-                )
-                .expect("Failed to parse env var COGNITO_AUTH_ENDPOINT as a URL"),
-                cognito_redirect_uri: std::env::var("COGNITO_REDIRECT_URI")
-                    .unwrap_or_else(|_| format!("{endpoint}/oauth2/idpresponse")),
+                cognito_user_pool_id: env_with_default_for_empty(
+                    "COGNITO_USER_POOL_ID",
+                    "us-west-2_Mf1K95El6",
+                ),
+                cognito_client_id: env_with_default_for_empty(
+                    "COGNITO_CLIENT_ID",
+                    "1a5vsre47o6pa39p3p81igfken",
+                ),
+                cognito_auth_endpoint: Url::parse(&format!("https://auth.{archodex_domain}"))
+                    .expect("Failed to parse auth endpoint as a URL"),
+                cognito_redirect_uri: env_with_default_for_empty(
+                    "COGNITO_REDIRECT_URI",
+                    &format!("{endpoint}/oauth2/idpresponse"),
+                ),
                 cognito_refresh_token_validity_in_days: std::env::var(
                     "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS",
                 )
                 .unwrap_or_else(|_| "1".to_string())
                 .parse()
                 .expect("Failed to parse COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS as a u16"),
-                app_redirect_uri: Url::parse(
-                    &std::env::var("APP_REDIRECT_URI").unwrap_or_else(|_| {
-                        "https://app.archodex.com/oauth2/idpresponse".to_string()
-                    }),
-                )
-                .expect("Failed to parse env var APP_REDIRECT_URI as a URL"),
-                cors_allowed_origin_suffixes,
+                app_redirect_uri,
             }
         });
 
@@ -162,6 +159,10 @@ impl Env {
 
     pub fn port() -> u16 {
         Self::get().port
+    }
+
+    pub fn archodex_domain() -> &'static str {
+        Self::get().archodex_domain.as_str()
     }
 
     pub fn accounts_surrealdb_url() -> &'static str {
@@ -221,10 +222,6 @@ impl Env {
         }
     }
 
-    pub(crate) fn cors_allowed_origin_suffixes() -> &'static HashSet<String> {
-        &Self::get().cors_allowed_origin_suffixes
-    }
-
     pub(crate) async fn api_private_key() -> &'static aes_gcm::Key<aes_gcm::Aes128Gcm> {
         #[cfg(not(feature = "archodex-com"))]
         {
@@ -243,5 +240,14 @@ impl Env {
         {
             archodex_com::api_private_key().await
         }
+    }
+}
+
+fn env_with_default_for_empty(var: &str, default: &str) -> String {
+    match std::env::var(var) {
+        Err(std::env::VarError::NotPresent) => default.to_string(),
+        Ok(value) if value.is_empty() => default.to_string(),
+        Ok(value) => value,
+        Err(err) => panic!("Invalid {var} env var: {err:?}"),
     }
 }

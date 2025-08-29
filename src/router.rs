@@ -1,4 +1,9 @@
-use axum::{Router, http::header::CONTENT_TYPE, middleware, routing::*};
+use axum::{
+    Router,
+    http::{HeaderValue, header::CONTENT_TYPE},
+    middleware,
+    routing::*,
+};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{AllowCredentials, AllowMethods, AllowOrigin, CorsLayer},
@@ -17,11 +22,12 @@ use crate::{
 pub fn router() -> Router {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::mirror_request())
-        .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
-            Env::cors_allowed_origin_suffixes()
-                .iter()
-                .any(|suffix| origin.as_bytes().ends_with(suffix.as_bytes()))
-        }))
+        .allow_origin(AllowOrigin::list([
+            HeaderValue::from_str(&format!("https://{}", Env::archodex_domain()))
+                .expect("Failed to parse archodex domain as HeaderValue"),
+            HeaderValue::from_str("http://localhost:5173")
+                .expect("Failed to parse localhost as HeaderValue"),
+        ]))
         .allow_headers([CONTENT_TYPE])
         .allow_credentials(AllowCredentials::yes());
 
