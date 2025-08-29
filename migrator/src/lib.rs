@@ -1,6 +1,6 @@
 use std::include_str;
 
-use anyhow::Context as _;
+use anyhow::{Context as _, bail};
 use surrealdb::{
     Surreal,
     engine::any::Any,
@@ -28,13 +28,21 @@ pub async fn migrate_accounts_database(
 
     info!("Executing queries in file accounts.surql...");
 
-    let db = surrealdb::engine::any::connect((
+    let res = surrealdb::engine::any::connect((
         surrealdb_url,
         Config::default()
             .capabilities(Capabilities::default().with_live_query_notifications(false))
             .strict(),
     ))
-    .await?;
+    .await;
+
+    if let Err(surrealdb::Error::Api(surrealdb::error::Api::Ws(err))) = &res {
+        bail!(
+            "Failed to connect to SurrealDB at {surrealdb_url}. Please ensure that the SurrealDB instance is running and accessible. ({err})"
+        );
+    }
+
+    let db = res?;
 
     if let Some(creds) = creds {
         db.signin(creds)
