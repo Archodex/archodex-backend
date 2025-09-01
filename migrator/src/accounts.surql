@@ -6,8 +6,7 @@ DEFINE FIELD IF NOT EXISTS id ON TABLE account TYPE string READONLY
   ASSERT string::len(record::id($this.id)) == 10 && string::is::numeric(record::id($this.id)) && (<number> record::id($this.id) >= 1000000000);
 DEFINE FIELD IF NOT EXISTS endpoint ON TABLE account TYPE string READONLY
   ASSERT string::is::url($this.endpoint);
-DEFINE FIELD IF NOT EXISTS service_data_surrealdb_url ON TABLE account TYPE option<string> READONLY
-  ASSERT type::is::none($this.service_data_surrealdb_url) || string::is::url($this.service_data_surrealdb_url);
+DEFINE FIELD OVERWRITE service_data_surrealdb_url ON TABLE account TYPE option<string> READONLY;
 DEFINE FIELD IF NOT EXISTS salt ON TABLE account TYPE bytes READONLY
   ASSERT bytes::len($this.salt) == 16;
 DEFINE FIELD IF NOT EXISTS created_at ON TABLE account TYPE datetime READONLY DEFAULT time::now();
