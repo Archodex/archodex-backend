@@ -11,6 +11,8 @@ const GITHUB_REPO_NAME: &str = "archodex-backend-archodex-com";
 
 #[tokio::main]
 async fn main() {
+    println!("cargo:rerun-if-changed=src/lib.rs");
+
     let out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let cache_dir = PathBuf::from(&out_dir).join("archodex-com-cache");
@@ -215,7 +217,7 @@ fn extract_archive(
 
             if should_write {
                 fs::write(&dest_path, new_content)?;
-                println!("cargo:warning=Restored modified file {relative_path:?}");
+                println!("cargo:warning=Restored file {relative_path:?}");
             }
         }
     }
