@@ -5,7 +5,6 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use axum_extra::extract::CookieJar;
 use josekit::{
     JoseError,
     jwk::JwkSet,
@@ -140,10 +139,18 @@ pub(crate) async fn dashboard_auth(
     mut req: Request,
     next: Next,
 ) -> Result<Response> {
-    let cookies = CookieJar::from_headers(req.headers());
+    let Some(authorization) = req.headers().get(AUTHORIZATION) else {
+        warn!("Missing Authorization header");
+        unauthorized!();
+    };
 
-    let Some(access_token) = cookies.get("accessToken") else {
-        warn!("Missing accessToken cookie");
+    let Ok(authorization) = authorization.to_str() else {
+        warn!("Failed to parse Authorization header as string");
+        unauthorized!();
+    };
+
+    let Some(access_token) = authorization.strip_prefix("Bearer ") else {
+        warn!("Invalid Authorization header format");
         unauthorized!();
     };
 
@@ -154,7 +161,7 @@ pub(crate) async fn dashboard_auth(
 
     let (jwk_set, verifier_map) = jwks(&jwks_issuer).await;
 
-    let user_id = match jwt::decode_with_verifier_in_jwk_set(access_token.value(), jwk_set, |jwk| {
+    let user_id = match jwt::decode_with_verifier_in_jwk_set(access_token, jwk_set, |jwk| {
         Ok(verifier_map
             .get(jwk.key_id().ok_or(JoseError::InvalidJwkFormat(anyhow!(
                 "Cognito jwk missing 'kid' field"

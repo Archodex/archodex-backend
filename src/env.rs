@@ -1,7 +1,5 @@
 use std::{ops::Deref, sync::LazyLock};
 
-use reqwest::Url;
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Mode {
     LocalDev,
@@ -20,10 +18,6 @@ pub struct Env {
     endpoint: String,
     cognito_user_pool_id: String,
     cognito_client_id: String,
-    cognito_auth_endpoint: Url,
-    cognito_redirect_uri: String,
-    cognito_refresh_token_validity_in_days: u16,
-    app_redirect_uri: Url,
 }
 
 impl Env {
@@ -102,22 +96,10 @@ impl Env {
                 ),
             };
 
-            let app_redirect_uri = match std::env::var("LOCAL_FRONTEND") {
-                Ok(local_frontend) if local_frontend.to_lowercase() == "true" => {
-                    Url::parse("http://localhost:5173/oauth2/idpresponse")
-                        .expect("Failed to parse local frontend redirect URL")
-                }
-                Ok(_) | Err(std::env::VarError::NotPresent) => {
-                    Url::parse(&format!("https://app.{archodex_domain}/oauth2/idpresponse"))
-                        .expect("Failed to parse default app redirect URL")
-                }
-                Err(err) => panic!("Invalid LOCAL_FRONTEND env var: {err:?}"),
-            };
-
             Env {
                 mode,
                 port,
-                archodex_domain: archodex_domain.clone(),
+                archodex_domain,
                 #[cfg(feature = "archodex-com")]
                 accounts_surrealdb_url,
                 #[cfg(not(feature = "archodex-com"))]
@@ -134,19 +116,6 @@ impl Env {
                     "COGNITO_CLIENT_ID",
                     "1a5vsre47o6pa39p3p81igfken",
                 ),
-                cognito_auth_endpoint: Url::parse(&format!("https://auth.{archodex_domain}"))
-                    .expect("Failed to parse auth endpoint as a URL"),
-                cognito_redirect_uri: env_with_default_for_empty(
-                    "COGNITO_REDIRECT_URI",
-                    &format!("{endpoint}/oauth2/idpresponse"),
-                ),
-                cognito_refresh_token_validity_in_days: std::env::var(
-                    "COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS",
-                )
-                .unwrap_or_else(|_| "1".to_string())
-                .parse()
-                .expect("Failed to parse COGNITO_REFRESH_TOKEN_VALIDITY_IN_DAYS as a u16"),
-                app_redirect_uri,
             }
         });
 
@@ -188,38 +157,6 @@ impl Env {
 
     pub(crate) fn cognito_client_id() -> &'static str {
         Self::get().cognito_client_id.as_str()
-    }
-
-    pub(crate) fn cognito_auth_endpoint() -> &'static Url {
-        &Self::get().cognito_auth_endpoint
-    }
-
-    pub(crate) fn cognito_redirect_uri(is_local_dev: bool) -> &'static str {
-        if is_local_dev {
-            static LOCAL_DEV_REDIRECT_URI: LazyLock<String> =
-                LazyLock::new(|| format!("{}/local", Env::get().cognito_redirect_uri));
-
-            &LOCAL_DEV_REDIRECT_URI
-        } else {
-            Self::get().cognito_redirect_uri.as_str()
-        }
-    }
-
-    pub(crate) fn cognito_refresh_token_validity_in_days() -> u16 {
-        Self::get().cognito_refresh_token_validity_in_days
-    }
-
-    pub(crate) fn app_redirect_uri(is_local_dev: bool) -> &'static Url {
-        if is_local_dev {
-            static LOCAL_DEV_URL: LazyLock<Url> = LazyLock::new(|| {
-                Url::parse("http://localhost:5173/oauth2/idpresponse")
-                    .expect("Invalid local development URL")
-            });
-
-            &LOCAL_DEV_URL
-        } else {
-            &Self::get().app_redirect_uri
-        }
     }
 
     pub(crate) async fn api_private_key() -> &'static aes_gcm::Key<aes_gcm::Aes128Gcm> {

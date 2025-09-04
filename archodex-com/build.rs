@@ -34,7 +34,9 @@ async fn main() {
             Ok(client) => client,
             Err(e) => {
                 println!("cargo:warning=Failed to authenticate with GitHub: {e}");
-                println!("cargo:warning=Please set GITHUB_TOKEN or GH_TOKEN environment variable, or configure git credentials");
+                println!(
+                    "cargo:warning=Please set GITHUB_TOKEN or GH_TOKEN environment variable, or configure git credentials"
+                );
                 panic!("Authentication required to access private repository");
             }
         };
@@ -139,17 +141,17 @@ fn extract_archive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // GitHub adds a prefix to the archive, we need to find it
     let mut root_prefix = String::new();
-    
+
     // First pass: find the root prefix
     let tar_gz = fs::File::open(archive_path)?;
     let tar = flate2::read::GzDecoder::new(tar_gz);
     let mut temp_archive = tar::Archive::new(tar);
-    
+
     for entry in temp_archive.entries()? {
         let entry = entry?;
         let path = entry.path()?;
         let path_str = path.to_string_lossy();
-        
+
         if let Some(pos) = path_str.find('/') {
             root_prefix = path_str[..=pos].to_string();
             break;
@@ -165,43 +167,52 @@ fn extract_archive(
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
         let path_str = path.to_string_lossy();
-        
+
         // Strip the root prefix if present
         let relative_path = if path_str.starts_with(&root_prefix) {
             &path_str[root_prefix.len()..]
         } else {
             &path_str
         };
-        
+
         // Skip empty paths
         if relative_path.is_empty() {
             continue;
         }
-        
+
         let dest_path = manifest_dir.join(relative_path);
-        
+
         // Create parent directories if needed
         if let Some(parent) = dest_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         // Extract the file only if it's different
         if entry.header().entry_type().is_file() {
             // Read the new content into memory
             let mut new_content = Vec::new();
             std::io::copy(&mut entry, &mut new_content)?;
-            
+
             // Check if we need to write the file
             let should_write = if dest_path.exists() {
                 // Compare with existing content
                 match fs::read(&dest_path) {
-                    Ok(existing_content) => existing_content != new_content,
+                    Ok(existing_content) => {
+                        if existing_content != new_content {
+                            println!(
+                                "cargo:warning=File {relative_path:?} is different than mainline"
+                            );
+                            false
+                        } else {
+                            false
+                        }
+                    }
                     Err(_) => true, // If we can't read the existing file, write the new one
                 }
             } else {
                 true // File doesn't exist, so write it
             };
-            
+
             if should_write {
                 fs::write(&dest_path, new_content)?;
                 println!("cargo:warning=Restored modified file {relative_path:?}");

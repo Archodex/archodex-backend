@@ -4,7 +4,6 @@ mod auth;
 mod db;
 mod event;
 mod global_container;
-mod oauth2;
 mod principal_chain;
 mod query;
 mod report;

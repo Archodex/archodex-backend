@@ -42,7 +42,7 @@ aes-gcm.workspace = true
 archodex-com = { path = "archodex-com", optional = true }
 archodex-error.workspace = true
 axum.workspace = true
-axum-extra = { version = "0.9.4", default-features = false, features = ["cookie"] }
+axum-extra = { version = "0.9.4", default-features = false }
 axum-macros = "0.4.1"
 base64.workspace = true
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }

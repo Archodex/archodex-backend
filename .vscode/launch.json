@@ -33,8 +33,6 @@
         // The following are required unless you are using anonymous access with a local SurrealDB service
         "SURREALDB_USERNAME": "${config:archodex.SURREALDB_USERNAME}",
         "SURREALDB_PASSWORD": "${config:archodex.SURREALDB_PASSWORD}",
-        // Set LOCAL_FRONTEND to "true" to use a local development archodex-frontend environment
-        "LOCAL_FRONTEND": "${config:archodex.LOCAL_FRONTEND}",
         // The following are optional values that are typically only used by Archodex.com developers
         "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
         "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
@@ -71,8 +69,6 @@
         "ACCOUNTS_SURREALDB_URL": "${config:archodex.ARCHODEX_COM_SURREALDB_URL}",
         "AWS_PROFILE": "${config:archodex.ARCHODEX_COM_AWS_PROFILE}",
         "CUSTOMER_DATA_OU_ID": "${config:archodex.ARCHODEX_COM_CUSTOMER_DATA_OU_ID}",
-        // Set LOCAL_FRONTEND to "true" to use a local development archodex-frontend environment
-        "LOCAL_FRONTEND": "${config:archodex.LOCAL_FRONTEND}",
         // Optionally set the following values in your VS Code user settings as needed
         "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
         "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
