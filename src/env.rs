@@ -57,7 +57,7 @@ impl Env {
                 std::env::var("ACCOUNTS_SURREALDB_URL").expect_err(
                     "ACCOUNTS_SURREALDB_URL env var should not be set in non-archodex-com builds",
                 ),
-                std::env::var("SURREALDB_URL").expect("Missing SURREALDB_URL env var"),
+                env_with_default_for_empty("SURREALDB_URL", "rocksdb://db"),
             );
 
             #[cfg(feature = "archodex-com")]

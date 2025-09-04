@@ -50,7 +50,25 @@ pub async fn migrate_accounts_database(
             .context("Failed to sign in to accounts database")?;
     }
 
-    db.use_ns("archodex").use_db("accounts").await?;
+    #[cfg(not(feature = "archodex-com"))]
+    {
+        db.query("DEFINE NAMESPACE IF NOT EXISTS archodex;")
+            .await?
+            .check()?;
+
+        db.use_ns("archodex").await?;
+
+        db.query("DEFINE DATABASE IF NOT EXISTS accounts;")
+            .await?
+            .check()?;
+
+        db.use_db("accounts").await?;
+    }
+
+    #[cfg(feature = "archodex-com")]
+    {
+        db.use_ns("archodex").use_db("accounts").await?;
+    }
 
     db.query(ACCOUNTS_SURQL).await?.check()?;
 

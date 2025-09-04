@@ -7,7 +7,7 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug local backend server",
+      "name": "Debug self-hosted backend server",
       "cargo": {
         "args": [
           "build",
@@ -21,23 +21,7 @@
       },
       "args": [],
       "cwd": "${workspaceFolder}",
-      "env": {
-        "COLORTERM": "truecolor",
-        "ENDPOINT": "http://localhost:5732",
-        "RUST_BACKTRACE": "1",
-        // Uncomment and modify to set a different log filter
-        // (https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives)
-        //"RUST_LOG": "info",
-        // The following must be set in your VS Code user settings
-        "SURREALDB_URL": "${config:archodex.SURREALDB_URL}",
-        // The following are required unless you are using anonymous access with a local SurrealDB service
-        "SURREALDB_USERNAME": "${config:archodex.SURREALDB_USERNAME}",
-        "SURREALDB_PASSWORD": "${config:archodex.SURREALDB_PASSWORD}",
-        // The following are optional values that are typically only used by Archodex.com developers
-        "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
-        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
-        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
-      },
+      "envFile": "${workspaceFolder}/.vscode/.env.self-hosted",
     },
     {
       "type": "lldb",
@@ -58,24 +42,7 @@
       },
       "args": [],
       "cwd": "${workspaceFolder}",
-      "env": {
-        "COLORTERM": "truecolor",
-        "ENDPOINT": "http://localhost:5731",
-        "RUST_BACKTRACE": "1",
-        // Uncomment and modify to set a different log filter
-        // (https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives)
-        //"RUST_LOG": "info",
-        // The following must be set in your VS Code user settings
-        "ACCOUNTS_SURREALDB_URL": "${config:archodex.ARCHODEX_COM_SURREALDB_URL}",
-        "AWS_PROFILE": "${config:archodex.ARCHODEX_COM_AWS_PROFILE}",
-        "CUSTOMER_DATA_OU_ID": "${config:archodex.ARCHODEX_COM_CUSTOMER_DATA_OU_ID}",
-        // Optionally set the following values in your VS Code user settings as needed
-        "ARCHODEX_DOMAIN": "${config:archodex.ARCHODEX_DOMAIN}",
-        "COGNITO_USER_POOL_ID": "${config:archodex.COGNITO_USER_POOL_ID}",
-        "COGNITO_CLIENT_ID": "${config:archodex.COGNITO_CLIENT_ID}",
-        // Optionally set the following to "local" for local development mode
-        "ARCHODEX_DEV_MODE": "${config:archodex.ARCHODEX_COM_DEV_MODE}",
-      },
+      "envFile": "${workspaceFolder}/.vscode/.env.archodex-com",
     }
   ]
 }
