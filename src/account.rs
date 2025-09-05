@@ -49,8 +49,6 @@ impl Account {
     pub(crate) async fn new(endpoint: String, account_id: Option<String>) -> anyhow::Result<Self> {
         let id = if let Some(account_id) = account_id {
             account_id
-        } else if Env::is_local_dev() {
-            "1000000001".to_string()
         } else {
             rand::thread_rng()
                 .gen_range::<u64, _>(1000000000..=9999999999)

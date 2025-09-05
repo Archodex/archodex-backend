@@ -200,15 +200,6 @@ pub(crate) async fn dashboard_auth(
 
     info!("Authenticated as user ID {user_id}");
 
-    let user_id = if Env::is_local_dev() {
-        let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
-            .expect("Failed to parse local development user ID");
-        info!("Local development mode: Overriding user ID to {user_id}");
-        user_id
-    } else {
-        user_id
-    };
-
     let account_id = params.get("account_id").cloned();
 
     req.extensions_mut().insert(DashboardAuth {

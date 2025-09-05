@@ -1,14 +1,6 @@
 use std::{ops::Deref, sync::LazyLock};
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Mode {
-    LocalDev,
-    RemoteDev,
-    Production,
-}
-
 pub struct Env {
-    mode: Mode,
     port: u16,
     archodex_domain: String,
     accounts_surrealdb_url: String,
@@ -23,16 +15,6 @@ pub struct Env {
 impl Env {
     fn get() -> &'static Self {
         static ENV: LazyLock<Env> = LazyLock::new(|| {
-            let mode = match std::env::var("ARCHODEX_DEV_MODE") {
-                Ok(dev_mode) => match dev_mode.as_str() {
-                    "local" => Mode::LocalDev,
-                    "remote" => Mode::RemoteDev,
-                    mode => panic!("Invalid ARCHODEX_DEV_MODE {mode:?}"),
-                },
-                Err(std::env::VarError::NotPresent) => Mode::Production,
-                Err(err) => panic!("Invalid ARCHODEX_DEV_MODE {err:?}"),
-            };
-
             let port = std::env::var("PORT")
                 .unwrap_or_else(|_| {
                     #[cfg(not(feature = "archodex-com"))]
@@ -97,7 +79,6 @@ impl Env {
             };
 
             Env {
-                mode,
                 port,
                 archodex_domain,
                 #[cfg(feature = "archodex-com")]
@@ -120,10 +101,6 @@ impl Env {
         });
 
         ENV.deref()
-    }
-
-    pub(crate) fn is_local_dev() -> bool {
-        Self::get().mode == Mode::LocalDev
     }
 
     pub fn port() -> u16 {
