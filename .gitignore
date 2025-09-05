@@ -3,4 +3,5 @@
 db
 
 # Ignore user-specific modifications to launch environment files
-.vscode/.env.*
+.vscode/.env.self-hosted
+.vscode/.env.archodex-com
