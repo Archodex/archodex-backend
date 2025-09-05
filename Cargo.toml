@@ -35,7 +35,7 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-archodex-com = ["dep:archodex-com"]
+archodex-com = ["dep:archodex-com", "archodex-com/archodex-com"]
 
 [dependencies]
 aes-gcm.workspace = true

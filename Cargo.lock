@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "archodex-com"
-version = "1.0.0+20ff22e25440e6494298e842923f19d9c26354c1"
+version = "1.0.0+ab5bb4c53a6fa874dc7c2a3d57bb844a6415f229"
 dependencies = [
  "aes-gcm",
  "archodex-error",
