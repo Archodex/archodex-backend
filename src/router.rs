@@ -26,7 +26,7 @@ pub fn router() -> Router {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::mirror_request())
         .allow_origin(AllowOrigin::list([
-            HeaderValue::from_str(&format!("https://{}", Env::archodex_domain()))
+            HeaderValue::from_str(&format!("https://app.{}", Env::archodex_domain()))
                 .expect("Failed to parse archodex domain as HeaderValue"),
             HeaderValue::from_str("http://localhost:5173")
                 .expect("Failed to parse localhost as HeaderValue"),
