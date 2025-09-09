@@ -3,17 +3,16 @@ pub mod proto {
 }
 
 use aes_gcm::{
-    aead::{self, Aead},
     AeadCore, Aes128Gcm, KeyInit,
+    aead::{self, Aead},
 };
-use anyhow::Context;
 use base64::prelude::*;
 use chrono::{DateTime, Utc};
 use prost::Message;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use archodex_error::{anyhow, bail, ensure};
+use archodex_error::anyhow::{self, Context as _, anyhow, bail, ensure};
 
 use crate::{env::Env, next_binding, surrealdb_deserializers, user::User};
 

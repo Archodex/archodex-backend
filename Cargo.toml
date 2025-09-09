@@ -1,5 +1,6 @@
 [workspace]
 members = ["server", "lambda"]
+default-members = ["server", "migrator"]
 
 [workspace.package]
 version = "0.1.0"
@@ -23,7 +24,7 @@ base64 = "0.22.1"
 migrator = { path = "migrator" }
 serde = { version = "1.0.202", features = ["derive"] }
 serde_json = "1.0.117"
-surrealdb = { version = "2.3.7", features = ["rustls"] }
+surrealdb = { version = "2.3.7", features = ["kv-rocksdb", "rustls"] }
 tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.40", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
@@ -34,15 +35,14 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-archodex-com = ["dep:archodex-com"]
+archodex-com = ["dep:archodex-com", "archodex-com/archodex-com"]
 
 [dependencies]
 aes-gcm.workspace = true
-anyhow.workspace = true
 archodex-com = { path = "archodex-com", optional = true }
 archodex-error.workspace = true
 axum.workspace = true
-axum-extra = { version = "0.9.4", default-features = false, features = ["cookie"] }
+axum-extra = { version = "0.9.4", default-features = false }
 axum-macros = "0.4.1"
 base64.workspace = true
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }

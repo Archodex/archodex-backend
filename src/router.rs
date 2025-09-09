@@ -1,37 +1,39 @@
-use axum::{http::header::CONTENT_TYPE, middleware, routing::*, Router};
+use axum::{
+    Router,
+    http::{
+        HeaderValue,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
+    middleware,
+    routing::*,
+};
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::{AllowCredentials, AllowMethods, AllowOrigin, CorsLayer},
+    cors::{AllowMethods, AllowOrigin, CorsLayer},
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing::Level;
 
 use crate::{
     accounts,
-    auth::{dashboard_auth, report_api_key_auth, DashboardAuth, ReportApiKeyAuth},
+    auth::{DashboardAuth, ReportApiKeyAuth, dashboard_auth, report_api_key_auth},
     db::db,
-    oauth2, principal_chain, query, report, report_api_keys, resource,
+    env::Env,
+    principal_chain, query, report, report_api_keys, resource,
 };
 
 pub fn router() -> Router {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::mirror_request())
-        .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
-            origin == "http://localhost:5173"
-                || origin.as_bytes().ends_with(b".archodex.com")
-                || origin.as_bytes().ends_with(b".dev.servicearch.com")
-        }))
-        .allow_headers([CONTENT_TYPE])
-        .allow_credentials(AllowCredentials::yes());
+        .allow_origin(AllowOrigin::list([
+            HeaderValue::from_str(&format!("https://app.{}", Env::archodex_domain()))
+                .expect("Failed to parse archodex domain as HeaderValue"),
+            HeaderValue::from_str("http://localhost:5173")
+                .expect("Failed to parse localhost as HeaderValue"),
+        ]))
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
-    let unauthed_router = Router::new()
-        .route("/oauth2/token", post(oauth2::refresh_token_remote))
-        .route("/oauth2/token/local", post(oauth2::refresh_token_local))
-        .route("/oauth2/revoke", post(oauth2::revoke_token))
-        .layer(cors_layer.clone())
-        .route("/oauth2/idpresponse", get(oauth2::idp_response_remote))
-        .route("/oauth2/idpresponse/local", get(oauth2::idp_response_local))
-        .route("/health", get(|| async { "Ok" }));
+    let unauthed_router = Router::new().route("/health", get(|| async { "Ok" }));
 
     let dashboard_authed_router = Router::new()
         .nest(

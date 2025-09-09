@@ -1,29 +1,31 @@
 use std::{collections::HashMap, time::SystemTime};
 
-use anyhow::{anyhow, Context};
 use axum::{
     extract::{Path, Request},
     middleware::Next,
     response::Response,
 };
-use axum_extra::extract::CookieJar;
 use josekit::{
+    JoseError,
     jwk::JwkSet,
     jws::alg::rsassa::{RsassaJwsAlgorithm, RsassaJwsVerifier},
-    jwt, JoseError,
+    jwt,
 };
 use reqwest::header::AUTHORIZATION;
-use surrealdb::{engine::any::Any, sql::statements::CommitStatement, Surreal, Uuid};
+use surrealdb::{Surreal, Uuid, engine::any::Any, sql::statements::CommitStatement};
 use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
-use archodex_error::{bail, unauthorized};
 use crate::{
-    db::{accounts_db, BeginReadonlyStatement, QueryCheckFirstRealError},
+    Result,
+    db::{BeginReadonlyStatement, QueryCheckFirstRealError, accounts_db},
     env::Env,
     report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
-    Result,
+};
+use archodex_error::{
+    anyhow::{Context as _, anyhow},
+    unauthorized,
 };
 
 static JWK_SET: OnceCell<(JwkSet, HashMap<String, RsassaJwsVerifier>)> = OnceCell::const_new();
@@ -137,22 +139,29 @@ pub(crate) async fn dashboard_auth(
     mut req: Request,
     next: Next,
 ) -> Result<Response> {
-    let cookies = CookieJar::from_headers(req.headers());
-
-    let Some(access_token) = cookies.get("accessToken") else {
-        warn!("Missing accessToken cookie");
+    let Some(authorization) = req.headers().get(AUTHORIZATION) else {
+        warn!("Missing Authorization header");
         unauthorized!();
     };
 
-    let cognito_issuer_endpoint = Env::cognito_issuer_endpoint();
+    let Ok(authorization) = authorization.to_str() else {
+        warn!("Failed to parse Authorization header as string");
+        unauthorized!();
+    };
+
+    let Some(access_token) = authorization.strip_prefix("Bearer ") else {
+        warn!("Invalid Authorization header format");
+        unauthorized!();
+    };
+
     let cognito_user_pool_id = Env::cognito_user_pool_id();
     let cognito_client_id = Env::cognito_client_id();
 
-    let jwks_issuer = format!("{cognito_issuer_endpoint}/{cognito_user_pool_id}");
+    let jwks_issuer = format!("https://cognito-idp.us-west-2.amazonaws.com/{cognito_user_pool_id}");
 
     let (jwk_set, verifier_map) = jwks(&jwks_issuer).await;
 
-    let user_id = match jwt::decode_with_verifier_in_jwk_set(access_token.value(), jwk_set, |jwk| {
+    let user_id = match jwt::decode_with_verifier_in_jwk_set(access_token, jwk_set, |jwk| {
         Ok(verifier_map
             .get(jwk.key_id().ok_or(JoseError::InvalidJwkFormat(anyhow!(
                 "Cognito jwk missing 'kid' field"
@@ -190,15 +199,6 @@ pub(crate) async fn dashboard_auth(
         .with_context(|| format!("Failed to parse user ID {user_id:?} as UUID"))?;
 
     info!("Authenticated as user ID {user_id}");
-
-    let user_id = if Env::is_local_dev() {
-        let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")
-            .expect("Failed to parse local development user ID");
-        info!("Local development mode: Overriding user ID to {user_id}");
-        user_id
-    } else {
-        user_id
-    };
 
     let account_id = params.get("account_id").cloned();
 

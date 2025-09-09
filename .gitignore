@@ -1,2 +1,7 @@
 .aws-sam
 /target
+db
+
+# Ignore user-specific modifications to launch environment files
+.vscode/.env.self-hosted
+.vscode/.env.archodex-com

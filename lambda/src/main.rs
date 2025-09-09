@@ -4,15 +4,14 @@ use futures_lite::future;
 use tokio::runtime::Builder;
 
 fn setup_logging() {
-    use tracing_subscriber::{filter::EnvFilter, fmt};
-
-    let env_filter = if let Ok(rust_log) = std::env::var("RUST_LOG") {
-        EnvFilter::builder().parse_lossy(rust_log)
-    } else {
-        EnvFilter::builder()
-            .parse("surrealdb_core::kvs::dynamodb=debug,info")
-            .unwrap()
+    use tracing_subscriber::{
+        filter::{EnvFilter, LevelFilter},
+        fmt,
     };
+
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
 
     let fmt = fmt().with_env_filter(env_filter);
 

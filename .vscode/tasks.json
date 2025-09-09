@@ -4,45 +4,24 @@
     {
       "type": "cargo",
       "command": "build",
-      "problemMatcher": ["$rustc"],
-      "group": "build",
-      "label": "rust: cargo build"
-    },
-    {
-      "type": "cargo",
-      "command": "lambda",
-      "args": [
-        "build",
-        "--release",
-        "--arm64",
-        "--package",
-        "lambda",
-        "--output-format",
-        "zip"
+      "problemMatcher": [
+        "$rustc"
       ],
-      "env": {
-        "PATH": "${env:PATH}:${env:HOME}/zig"
-      },
-      "problemMatcher": ["$rustc"],
       "group": {
         "kind": "build",
         "isDefault": true
       },
-      "label": "rust: cargo lambda build"
-    },
-    {
-      "label": "Start archodex-backend-dev pod in Kubernetes cluster",
-      "type": "shell",
-      "command": "kubectl apply -f .devcontainer/k8s",
-      "problemMatcher": []
+      "label": "rust: cargo build"
     },
     {
       "type": "shell",
-      "command": "act --platform ubuntu-latest=catthehacker/ubuntu:act-24.04 --bind --workflows .github/workflows/build-dev.yml --matrix arch:aarch64 --job build",
+      "command": "act --platform ubuntu-latest=catthehacker/ubuntu:act-24.04 --bind --artifact-server-path /tmp/act-artifacts --workflows .github/workflows/build-dev.yml --matrix arch:aarch64 --job build",
       "options": {
         "shell": {
           "executable": "/bin/bash",
-          "args": ["-c"]
+          "args": [
+            "-c"
+          ]
         }
       },
       "problemMatcher": [],
