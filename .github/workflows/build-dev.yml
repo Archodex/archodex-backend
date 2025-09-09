@@ -29,64 +29,35 @@ jobs:
       - name: Install mold
         uses: rui314/setup-mold@v1
 
-      - name: Install development packages (x86_64)
-        if: matrix.arch == 'x86_64'
+      - name: Install development packages
         run: |-
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang musl-dev protobuf-compiler
-
-      - name: Install development packages (aarch64)
-        if: matrix.arch == 'aarch64'
-        run: |-
-          UBUNTU_VERSION=`lsb_release -cs`
-
-          # Add arm64 package archive sources
-          sudo tee /etc/apt/sources.list.d/ubuntu.sources > /dev/null << EOF
-          Types: deb
-          URIs: http://archive.ubuntu.com/ubuntu/
-          Suites: ${UBUNTU_VERSION} ${UBUNTU_VERSION}-updates ${UBUNTU_VERSION}-backports
-          Components: main universe restricted multiverse
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          Architectures: amd64
-
-          Types: deb
-          URIs: http://archive.ubuntu.com/ubuntu/
-          Suites: ${UBUNTU_VERSION}-security
-          Components: main universe restricted multiverse
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          Architectures: amd64
-
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports/
-          Suites: ${UBUNTU_VERSION} ${UBUNTU_VERSION}-updates ${UBUNTU_VERSION}-backports ${UBUNTU_VERSION}-security
-          Components: main restricted universe multiverse
-          Architectures: arm64
+          # Skip installing package docs to improve GHA ubuntu times
+          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
+          path-exclude /usr/share/doc/*
+          path-exclude /usr/share/man/*
+          path-exclude /usr/share/info/*
           EOF
 
-          # Enable the arm64 architecture
-          sudo dpkg --add-architecture arm64
-
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang musl-dev:arm64 protobuf-compiler
+          sudo apt-get install -y --no-install-recommends clang protobuf-compiler
 
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
           targets: ${{ matrix.arch }}-unknown-linux-musl
-          cache-target: ${{ matrix.arch }}-unknown-linux-musl/release
+          cache-target: target-${{ matrix.arch }}
+          target-dirs: .
+
+      - name: Install musl toolchain
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.arch }}-unknown-linux-musl
 
       - name: Build Server package
-        env:
-          # ring overrides cargo's compilation settings and attempts to use gcc. But when we are cross-compiling we
-          # don't have easy access to a cross, musl gcc. Force it to use clang, just like we set in .cargo/config.toml.
-          #
-          # We also must provide the musl system include path, because otherwise clang will default to searching
-          # /usr/include which has incompatible glibc headers.
-          CC: clang
-          TARGET_CFLAGS: --target=${{ matrix.arch }}-unknown-linux-musl -I/usr/include/${{ matrix.arch }}-linux-musl
         run: |-
           cargo build \
             --release \
+            --target-dir target-${{ matrix.arch }} \
             --target ${{ matrix.arch }}-unknown-linux-musl \
             --package server
 

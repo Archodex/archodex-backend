@@ -2,4 +2,4 @@
 # the build output.
 *
 
-!target/*/release/server
+!target-*/*/release/server
