@@ -7,6 +7,7 @@ pub struct Env {
     #[cfg(not(feature = "archodex-com"))]
     surrealdb_url: String,
     surrealdb_creds: Option<surrealdb::opt::auth::Root<'static>>,
+    #[cfg(feature = "archodex-com")]
     endpoint: String,
     cognito_user_pool_id: String,
     cognito_client_id: String,
@@ -31,8 +32,6 @@ impl Env {
                 .expect("Failed to parse PORT env var as u16");
 
             let archodex_domain = env_with_default_for_empty("ARCHODEX_DOMAIN", "archodex.com");
-
-            let endpoint = std::env::var("ENDPOINT").expect("Missing ENDPOINT env var");
 
             #[cfg(not(feature = "archodex-com"))]
             let (_, surrealdb_url) = (
@@ -88,7 +87,8 @@ impl Env {
                 #[cfg(not(feature = "archodex-com"))]
                 surrealdb_url,
                 surrealdb_creds,
-                endpoint: endpoint.clone(),
+                #[cfg(feature = "archodex-com")]
+                endpoint: std::env::var("ENDPOINT").expect("Missing ENDPOINT env var"),
                 cognito_user_pool_id: env_with_default_for_empty(
                     "COGNITO_USER_POOL_ID",
                     "us-west-2_Mf1K95El6",
@@ -128,6 +128,7 @@ impl Env {
         Self::get().surrealdb_creds
     }
 
+    #[cfg(feature = "archodex-com")]
     pub(crate) fn endpoint() -> &'static str {
         Self::get().endpoint.as_str()
     }

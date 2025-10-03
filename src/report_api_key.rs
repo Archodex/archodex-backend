@@ -79,7 +79,10 @@ impl ReportApiKey {
 
         let aad = proto::ReportApiKeyEncryptedAad {
             key_id: self.id,
-            endpoint: Env::endpoint().to_owned(),
+            #[cfg(feature = "archodex-com")]
+            endpoint: Some(Env::endpoint().to_owned()),
+            #[cfg(not(feature = "archodex-com"))]
+            endpoint: None,
             account_salt: account_salt.clone(),
         };
 
@@ -95,7 +98,10 @@ impl ReportApiKey {
 
         let report_api_key = proto::ReportApiKey {
             version: 1,
-            endpoint: Env::endpoint().to_owned(),
+            #[cfg(feature = "archodex-com")]
+            endpoint: Some(Env::endpoint().to_owned()),
+            #[cfg(not(feature = "archodex-com"))]
+            endpoint: None,
             account_salt,
             nonce: nonce.as_slice().to_vec(),
             encrypted_contents: encrypted_account_id,
@@ -145,10 +151,23 @@ impl ReportApiKey {
         let value = proto::ReportApiKey::decode(value.as_slice())
             .context("Invalid report key value: Failed to decode report key value as protobuf")?;
 
-        ensure!(
-            value.endpoint == Env::endpoint(),
-            "Invalid report key value: Incorrect endpoint"
-        );
+        #[cfg(feature = "archodex-com")]
+        {
+            let Some(endpoint) = &value.endpoint else {
+                bail!("Invalid report key value: Missing archodex.com endpoint");
+            };
+
+            ensure!(
+                endpoint == Env::endpoint(),
+                format!(
+                    "Invalid report key value: Incorrect archodex.com endpoint (key: {endpoint})"
+                )
+            );
+        }
+        #[cfg(not(feature = "archodex-com"))]
+        if let Some(endpoint) = value.endpoint {
+            bail!("Invalid report key value: Key is meant for archodex.com endpoint {endpoint:?}");
+        }
 
         ensure!(
             value.account_salt.len() == 16,

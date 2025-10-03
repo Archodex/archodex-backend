@@ -15,6 +15,7 @@ use archodex_error::anyhow;
 pub(crate) struct Account {
     #[serde(deserialize_with = "surrealdb_deserializers::string::deserialize")]
     id: String,
+    #[cfg(feature = "archodex-com")]
     endpoint: String,
     #[cfg(feature = "archodex-com")]
     service_data_surrealdb_url: Option<String>,
@@ -29,6 +30,7 @@ pub(crate) struct Account {
 #[derive(Deserialize, Serialize)]
 pub(crate) struct AccountPublic {
     pub(crate) id: String,
+    #[cfg(feature = "archodex-com")]
     pub(crate) endpoint: String,
 }
 
@@ -36,32 +38,46 @@ impl From<Account> for AccountPublic {
     fn from(record: Account) -> Self {
         Self {
             id: record.id,
+            #[cfg(feature = "archodex-com")]
             endpoint: record.endpoint,
         }
     }
 }
 
 impl Account {
+    #[cfg(feature = "archodex-com")]
     #[instrument(err)]
     pub(crate) async fn new(endpoint: String, id: String, principal: User) -> anyhow::Result<Self> {
-        #[cfg(not(feature = "archodex-com"))]
-        let service_data_surrealdb_url = Some(Env::surrealdb_url().to_string());
-        #[cfg(feature = "archodex-com")]
         let service_data_surrealdb_url = if endpoint == Env::endpoint() {
-            Some(archodex_com::create_account_service_database(&id).await?)
+            let service_data_surrealdb_url =
+                archodex_com::create_account_service_database(&id).await?;
+            migrate_service_data_database(&service_data_surrealdb_url, &id).await?;
+            Some(service_data_surrealdb_url)
         } else {
             None
         };
 
-        if let Some(service_data_surrealdb_url) = &service_data_surrealdb_url {
-            migrate_service_data_database(service_data_surrealdb_url, &id).await?;
-        }
-
         Ok(Self {
             id,
             endpoint,
-            #[cfg(feature = "archodex-com")]
             service_data_surrealdb_url,
+            salt: rand::thread_rng().r#gen::<[u8; 16]>().to_vec(),
+            created_at: None,
+            created_by: Some(principal),
+            deleted_at: None,
+            deleted_by: None,
+        })
+    }
+
+    #[cfg(not(feature = "archodex-com"))]
+    #[instrument(err)]
+    pub(crate) async fn new(id: String, principal: User) -> anyhow::Result<Self> {
+        let service_data_surrealdb_url = Env::surrealdb_url();
+
+        migrate_service_data_database(service_data_surrealdb_url, &id).await?;
+
+        Ok(Self {
+            id,
             salt: rand::thread_rng().r#gen::<[u8; 16]>().to_vec(),
             created_at: None,
             created_by: Some(principal),
@@ -133,14 +149,18 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
         let created_by_binding = next_binding();
 
         #[cfg(not(feature = "archodex-com"))]
-        let service_data_surrealdb_url_value = Option::<String>::None;
+        let (endpoint_value, service_data_surrealdb_url_value) =
+            (Option::<String>::None, Option::<String>::None);
         #[cfg(feature = "archodex-com")]
-        let service_data_surrealdb_url_value = account.service_data_surrealdb_url.clone();
+        let (endpoint_value, service_data_surrealdb_url_value) = (
+            account.endpoint.clone(),
+            account.service_data_surrealdb_url.clone(),
+        );
 
         self
             .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding}, created_by: ${created_by_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
-            .bind((endpoint_binding, account.endpoint.clone()))
+            .bind((endpoint_binding, endpoint_value))
             .bind((service_data_surrealdb_url_binding, service_data_surrealdb_url_value))
             .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.clone())))
             .bind((created_by_binding, surrealdb::sql::Thing::from(principal)))

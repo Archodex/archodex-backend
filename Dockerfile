@@ -20,6 +20,7 @@ RUN set -eux; \
   install -m 0755 "target/${T}-unknown-linux-gnu/release/server" /server
 
 FROM cgr.dev/chainguard/glibc-dynamic:latest
+EXPOSE 5732
 COPY --from=pick /server /
 
 ENTRYPOINT ["/server"]

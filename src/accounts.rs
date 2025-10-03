@@ -10,7 +10,6 @@ use crate::{
     account::{Account, AccountPublic, AccountQueries},
     auth::DashboardAuth,
     db::{QueryCheckFirstRealError, accounts_db},
-    env::Env,
 };
 
 #[derive(Serialize)]
@@ -63,14 +62,12 @@ pub(crate) async fn create_local_account(
     auth: DashboardAuth,
     req: CreateAccountRequest,
 ) -> Result<Json<AccountPublic>> {
-    let endpoint = Env::endpoint();
-
     verify_no_local_accounts_exist().await?;
 
     let principal = auth.principal();
     principal.ensure_user_record_exists().await?;
 
-    let account = Account::new(endpoint.to_string(), req.account_id, principal.clone())
+    let account = Account::new(req.account_id, principal.clone())
         .await
         .context("Failed to create new account")?;
 
@@ -93,11 +90,6 @@ pub(crate) async fn create_local_account(
 async fn verify_no_local_accounts_exist() -> Result<()> {
     use archodex_error::{anyhow::anyhow, conflict};
 
-    #[derive(Deserialize, PartialEq)]
-    struct AccountsCount {
-        count: u64,
-    }
-
     let local_account_exists: bool = accounts_db()
         .await?
         .query("RETURN COUNT(SELECT id FROM account WHERE deleted_at IS NONE LIMIT 1) > 0")
@@ -119,6 +111,8 @@ pub(crate) async fn create_archodex_com_account(
     auth: DashboardAuth,
     req: CreateAccountRequest,
 ) -> Result<Json<AccountPublic>> {
+    use crate::env::Env;
+
     let endpoint = if let Some(endpoint) = req.endpoint {
         endpoint
     } else {

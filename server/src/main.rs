@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use archodex_backend::env::Env;
-use tracing::info;
+use tracing::{info, warn};
 
 #[cfg(debug_assertions)]
 const RUNTIME_STACK_SIZE: usize = 20 * 1024 * 1024; // 20MiB in debug mode
@@ -64,6 +64,44 @@ unsafe fn setup_surrealdb_env_vars() {
     }
 }
 
+async fn wait_for_ctrl_c() {
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => info!("Received SIGINT (Ctrl+C), initiating graceful shutdown"),
+        Err(error) => {
+            warn!(%error, "Failed to listen for Ctrl+C signal; waiting for SIGTERM");
+            std::future::pending::<()>().await;
+        }
+    }
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        let mut terminate = match signal(SignalKind::terminate()) {
+            Ok(signal) => signal,
+            Err(error) => {
+                warn!(%error, "Failed to listen for SIGTERM; relying on Ctrl+C handler only");
+                wait_for_ctrl_c().await;
+                return;
+            }
+        };
+
+        tokio::select! {
+            () = wait_for_ctrl_c() => {},
+            _ = terminate.recv() => {
+                info!("Received SIGTERM, initiating graceful shutdown");
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        wait_for_ctrl_c().await;
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // This is safe to call first thing at process start before any threads may be spawned (e.g. by tokio)
     unsafe { setup_surrealdb_env_vars() };
@@ -98,10 +136,12 @@ fn main() -> anyhow::Result<()> {
 
             info!("Listening on port {port}");
 
-            axum::serve(listener, archodex_backend::router::router()).await?;
+            axum::serve(listener, archodex_backend::router::router())
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
 
             anyhow::Ok(())
         })?;
 
-    unreachable!("Tokio runtime completed unexpectedly");
+    Ok(())
 }

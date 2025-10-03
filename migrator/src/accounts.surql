@@ -4,8 +4,8 @@ DEFINE TABLE IF NOT EXISTS account SCHEMAFULL TYPE NORMAL;
 DEFINE FIELD IF NOT EXISTS id ON TABLE account TYPE string READONLY
   // The account ID is a 10-digit number that starts with a non-zero value.
   ASSERT string::len(record::id($this.id)) == 10 && string::is::numeric(record::id($this.id)) && (<number> record::id($this.id) >= 1000000000);
-DEFINE FIELD IF NOT EXISTS endpoint ON TABLE account TYPE string READONLY
-  ASSERT string::is::url($this.endpoint);
+DEFINE FIELD OVERWRITE endpoint ON TABLE account TYPE option<string> READONLY
+  ASSERT type::is::none($this.endpoint) OR string::is::url($this.endpoint);
 DEFINE FIELD OVERWRITE service_data_surrealdb_url ON TABLE account TYPE option<string> READONLY;
 DEFINE FIELD IF NOT EXISTS salt ON TABLE account TYPE bytes READONLY
   ASSERT bytes::len($this.salt) == 16;

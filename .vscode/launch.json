@@ -23,7 +23,6 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "COLORTERM": "truecolor",
-        "ENDPOINT": "http://localhost:5732",
         "RUST_BACKTRACE": "1"
       },
       // Additional environment variables may be defined here, see template file
