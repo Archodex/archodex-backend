@@ -1,3 +1,10 @@
+pub mod provider;
+
+pub use provider::{AuthProvider, RealAuthProvider};
+
+#[cfg(any(test, feature = "test-support"))]
+pub use provider::{AuthContext, FixedAuthProvider};
+
 use std::{collections::HashMap, time::SystemTime};
 
 use axum::{extract::Request, middleware::Next, response::Response};
@@ -16,7 +23,7 @@ use crate::{
     Result,
     db::{QueryCheckFirstRealError, accounts_db},
     env::Env,
-    report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
+    report_api_key::{ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
 };
 use archodex_error::{
@@ -193,65 +200,11 @@ pub(crate) struct ReportApiKeyAuth {
 }
 
 impl ReportApiKeyAuth {
-    pub(crate) async fn authenticate(mut req: Request, next: Next) -> Result<Response> {
-        let authorization = req.headers().get(AUTHORIZATION);
-        let report_api_key_auth = async move {
-            let Some(report_api_key_value) = authorization else {
-                warn!("Missing Authorization header");
-                unauthorized!();
-            };
-
-            let Ok(report_api_key_value) = report_api_key_value.to_str() else {
-                warn!("Failed to parse Authorization header value as string");
-                unauthorized!();
-            };
-
-            let (account_id, key_id) =
-                match ReportApiKey::validate_value(report_api_key_value).await {
-                    Ok((account_id, key_id)) => (account_id, key_id),
-                    Err(err) => {
-                        warn!(?err, "Failed to validate report key value");
-                        unauthorized!();
-                    }
-                };
-
-            Result::Ok(ReportApiKeyAuth { account_id, key_id })
-        }
-        .instrument(error_span!("authenticate"))
-        .await?;
-
-        tracing::Span::current().record("auth", tracing::field::debug(&report_api_key_auth));
-
-        req.extensions_mut().insert(report_api_key_auth);
-
-        Ok(next.run(req).await)
-    }
-
-    #[instrument(err, level = "error", skip_all)]
-    async fn _authenticate(req: &Request) -> Result<ReportApiKeyAuth> {
-        let Some(report_api_key_value) = req.headers().get(AUTHORIZATION) else {
-            warn!("Missing Authorization header");
-            unauthorized!();
-        };
-
-        let Ok(report_api_key_value) = report_api_key_value.to_str() else {
-            warn!("Failed to parse Authorization header value as string");
-            unauthorized!();
-        };
-
-        let (account_id, key_id) = match ReportApiKey::validate_value(report_api_key_value).await {
-            Ok((account_id, key_id)) => (account_id, key_id),
-            Err(err) => {
-                warn!(?err, "Failed to validate report key value");
-                unauthorized!();
-            }
-        };
-
-        Ok(ReportApiKeyAuth { account_id, key_id })
-    }
-
-    pub(crate) fn account_id(&self) -> &str {
-        &self.account_id
+    /// Creates auth context from validated credentials.
+    ///
+    /// Only use after authentication validation (e.g., via `AuthProvider`).
+    pub(crate) fn from_credentials(account_id: String, key_id: u32) -> Self {
+        Self { account_id, key_id }
     }
 
     pub(crate) async fn validate_account_access(&self, db: &Surreal<Any>) -> Result<()> {

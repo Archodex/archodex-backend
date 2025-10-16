@@ -57,11 +57,13 @@ edition.workspace = true
 default = ["rocksdb"]
 archodex-com = ["dep:archodex-com", "archodex-com/archodex-com"]
 rocksdb = ["surrealdb/kv-rocksdb"]
+test-support = []  # Feature flag for integration tests to access test utilities
 
 [dependencies]
 aes-gcm.workspace = true
 archodex-com = { path = "archodex-com", optional = true }
 archodex-error.workspace = true
+async-trait = "0.1"
 axum.workspace = true
 axum-extra = { version = "0.9.6", default-features = false }
 axum-macros = "0.4.2"
@@ -89,6 +91,11 @@ tower-http = { version = "0.5.2", default-features = false, features = [
 ] }
 tracing.workspace = true
 uuid = { version = "1.18.1", features = ["v7"] }
+
+[dev-dependencies]
+archodex-backend = { path = ".", features = ["test-support"] }
+tower = { version = "0.5", features = ["util"] }
+surrealdb = { version = "= 2.3.7", features = ["rustls", "kv-mem"] }
 
 [build-dependencies]
 prost-build = "0.13.5"

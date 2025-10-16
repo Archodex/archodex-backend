@@ -6,7 +6,7 @@ use archodex_error::anyhow::Context as _;
 
 use crate::{
     Result,
-    account::{Account, AccountPublic, AccountQueries},
+    account::{Account, AccountPublic, AccountQueries, AuthedAccount},
     auth::DashboardAuth,
     db::{QueryCheckFirstRealError, accounts_db},
 };
@@ -139,7 +139,7 @@ pub(crate) async fn create_archodex_com_account(
 #[instrument(err, skip_all)]
 pub(crate) async fn delete_account(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
 ) -> Result<()> {
     auth.principal().ensure_user_record_exists().await?;
 
@@ -158,12 +158,15 @@ pub(crate) async fn delete_account(
     }
 
     #[cfg(feature = "archodex-com")]
-    if let Some(service_data_surrealdb_url) = account.service_data_surrealdb_url() {
-        archodex_com::delete_account_service_database(service_data_surrealdb_url, account.id())
-            .await?;
+    if let Some(service_data_surrealdb_url) = authed.account.service_data_surrealdb_url() {
+        archodex_com::delete_account_service_database(
+            service_data_surrealdb_url,
+            authed.account.id(),
+        )
+        .await?;
     }
 
-    db.delete_account_query(&account, auth.principal())
+    db.delete_account_query(&authed.account, auth.principal())
         .await
         .context("Failed to submit query to delete account record in accounts database")?
         .check_first_real_error()

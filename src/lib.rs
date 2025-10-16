@@ -10,12 +10,23 @@ mod report;
 mod report_api_key;
 mod report_api_keys;
 mod resource;
+mod state;
 mod surrealdb_deserializers;
 mod user;
 mod value;
 
 pub mod env;
 pub mod router;
+
+// Test builds: group under a module to make intent clear and avoid polluting root API
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support {
+    pub use crate::account::{Account, AuthedAccount};
+    pub use crate::auth::{AuthContext, AuthProvider, FixedAuthProvider, RealAuthProvider};
+    pub use crate::db::{DBConnection, create_production_state};
+    pub use crate::router::create_router_with_state;
+    pub use crate::state::{AppState, ResourcesDbFactory};
+}
 
 use std::sync::atomic::AtomicU64;
 

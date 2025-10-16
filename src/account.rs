@@ -5,15 +5,16 @@ use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 use tracing::instrument;
 
 use crate::{
-    db::{DBConnection, migrate_service_data_database, resources_db},
+    db::{DBConnection, migrate_service_data_database},
     env::Env,
     next_binding, surrealdb_deserializers,
     user::User,
 };
 use archodex_error::anyhow;
 
+// pub(crate) in production, but re-exported as pub in test_support module
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct Account {
+pub struct Account {
     #[serde(deserialize_with = "surrealdb_deserializers::string::deserialize")]
     id: String,
     #[cfg(feature = "archodex-com")]
@@ -122,20 +123,24 @@ impl Account {
         &self.salt
     }
 
-    pub(crate) async fn resources_db(&self) -> anyhow::Result<DBConnection> {
-        #[cfg(not(feature = "archodex-com"))]
-        let service_data_surrealdb_url = Env::surrealdb_url();
-        #[cfg(feature = "archodex-com")]
-        let Some(service_data_surrealdb_url) = &self.service_data_surrealdb_url else {
-            use archodex_error::anyhow::bail;
-
-            bail!(
-                "No service data SurrealDB URL configured for account {}",
-                self.id
-            );
-        };
-
-        resources_db(service_data_surrealdb_url, &self.id).await
+    /// Creates an Account for testing, bypassing normal creation flow.
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn new_for_testing(id: String, salt: Vec<u8>) -> Self {
+        Self {
+            id,
+            #[cfg(feature = "archodex-com")]
+            endpoint: "test.archodex.com".to_string(),
+            #[cfg(feature = "archodex-com")]
+            service_data_surrealdb_url: None,
+            salt,
+            #[cfg(not(feature = "archodex-com"))]
+            api_private_key: None,
+            created_at: None,
+            created_by: None,
+            deleted_at: None,
+            deleted_by: None,
+        }
     }
 }
 
@@ -235,4 +240,13 @@ impl From<&Account> for surrealdb::sql::Thing {
     fn from(account: &Account) -> surrealdb::sql::Thing {
         surrealdb::sql::Thing::from(("account", surrealdb::sql::Id::String(account.id.clone())))
     }
+}
+
+/// Authenticated account with its resources database connection.
+///
+/// Created by auth middleware after validating credentials and loading account data.
+#[derive(Clone)]
+pub struct AuthedAccount {
+    pub account: Account,
+    pub resources_db: DBConnection,
 }

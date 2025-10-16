@@ -19,16 +19,24 @@ use uuid::Uuid;
 
 use crate::{
     accounts,
-    auth::{DashboardAuth, ReportApiKeyAuth},
-    db::{dashboard_auth_account, report_api_key_account},
+    auth::DashboardAuth,
+    db::{create_production_state, dashboard_auth_account, report_api_key_account},
     env::Env,
     principal_chain, query, report, report_api_keys, resource,
+    state::AppState,
 };
 
+/// Creates router with dependency-injected state
+///
+/// This function is pub for use by tests. Production code should use `router()`.
+///
+/// # Arguments
+/// * `state` - Application state with injected database connections and factories
+///
 /// # Panics
 ///
 /// Will panic if `Env::archodex_domain()` is not a valid domain.
-pub fn router() -> Router {
+pub fn create_router_with_state(state: AppState) -> Router {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::mirror_request())
         .allow_origin(AllowOrigin::list([
@@ -65,16 +73,24 @@ pub fn router() -> Router {
                 )
                 .route("/", delete(accounts::delete_account)),
         )
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(dashboard_auth_account)))
+        // Account loading middleware (runs second, inner layer)
+        .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
+            state.clone(),
+            dashboard_auth_account,
+        )))
         .route("/accounts", get(accounts::list_accounts))
         .route("/accounts", post(accounts::create_account))
+        // Auth middleware (runs first, outer layer)
         .layer(ServiceBuilder::new().layer(middleware::from_fn(DashboardAuth::authenticate)))
         .layer(cors_layer.clone());
 
     let report_api_key_authed_router = Router::new()
         .route("/report", post(report::report))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(report_api_key_account)))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(ReportApiKeyAuth::authenticate)));
+        // Authentication and account loading middleware
+        .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
+            state.clone(),
+            report_api_key_account,
+        )));
 
     let default_on_response_trace_handler = DefaultOnResponse::new().level(Level::INFO);
 
@@ -114,4 +130,19 @@ pub fn router() -> Router {
                     },
                 ),
         )
+        .with_state(state)
+}
+
+/// Creates router with production state
+///
+/// This is the main entry point for production code. It initializes the
+/// application state with global database connections and creates the router.
+///
+/// # Panics
+///
+/// Will panic if `Env::archodex_domain()` is not a valid domain.
+pub async fn router() -> Router {
+    let state = create_production_state().await;
+
+    create_router_with_state(state)
 }
