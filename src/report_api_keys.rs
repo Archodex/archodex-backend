@@ -8,7 +8,7 @@ use archodex_error::{anyhow::bail, bad_request, not_found};
 
 use crate::{
     Result,
-    account::Account,
+    account::AuthedAccount,
     auth::DashboardAuth,
     db::QueryCheckFirstRealError,
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
@@ -21,11 +21,10 @@ pub(crate) struct ListReportApiKeysResponse {
 
 #[instrument(err, skip_all)]
 pub(crate) async fn list_report_api_keys(
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
 ) -> Result<Json<ListReportApiKeysResponse>> {
-    let report_api_keys = account
-        .resources_db()
-        .await?
+    let report_api_keys = authed
+        .resources_db
         .list_report_api_keys_query()
         .await?
         .check_first_real_error()?
@@ -48,10 +47,10 @@ pub(crate) struct CreateReportApiKeyResponse {
     report_api_key_value: String,
 }
 
-#[instrument(err, skip(auth, account))]
+#[instrument(err, skip(auth, authed))]
 pub(crate) async fn create_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
     Path(params): Path<HashMap<String, String>>,
     Json(req): Json<CreateReportApiKeyRequest>,
 ) -> Result<Json<CreateReportApiKeyResponse>> {
@@ -61,10 +60,10 @@ pub(crate) async fn create_report_api_key(
 
     let report_api_key = ReportApiKey::new(req.description, auth.principal().clone());
     let report_api_key_value = report_api_key
-        .generate_value(account_id, account.salt().to_owned())
+        .generate_value(account_id, authed.account.salt().to_owned())
         .await?;
 
-    let db = account.resources_db().await?;
+    let db = &authed.resources_db;
 
     let query = db.create_report_api_key_query(&report_api_key);
 
@@ -85,10 +84,10 @@ pub(crate) async fn create_report_api_key(
     }))
 }
 
-#[instrument(err, skip(auth, account))]
+#[instrument(err, skip(auth, authed))]
 pub(crate) async fn revoke_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
     Path(params): Path<HashMap<String, String>>,
 ) -> Result<Json<()>> {
     let Some(report_api_key_id_string) = params.get("report_api_key_id") else {
@@ -99,9 +98,8 @@ pub(crate) async fn revoke_report_api_key(
         bad_request!("Invalid route key ID");
     };
 
-    let report_api_key = account
-        .resources_db()
-        .await?
+    let report_api_key = authed
+        .resources_db
         .revoke_report_api_key_query(report_api_key_id, auth.principal())
         .await?
         .check_first_real_error()?

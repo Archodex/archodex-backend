@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use axum::{
     Extension,
-    extract::{Path, Request},
+    extract::{Path, Request, State},
     middleware::Next,
     response::Response,
 };
@@ -17,9 +17,10 @@ use tracing::{info, instrument, warn};
 
 use crate::{
     Result,
-    account::{Account, AccountQueries},
+    account::{Account, AccountQueries, AuthedAccount},
     auth::{DashboardAuth, ReportApiKeyAuth},
     env::Env,
+    state::{AppState, GlobalResourcesDbFactory},
 };
 use archodex_error::{
     anyhow::{self, Context as _},
@@ -149,10 +150,24 @@ async fn get_concurrent_db_connection(url: &str) -> anyhow::Result<Surreal<Any>>
         .clone())
 }
 
-pub(crate) enum DBConnection {
+pub enum DBConnection {
     #[cfg(feature = "rocksdb")]
     Nonconcurrent(tokio::sync::MappedMutexGuard<'static, Surreal<Any>>),
     Concurrent(Surreal<Any>),
+}
+
+impl Clone for DBConnection {
+    fn clone(&self) -> Self {
+        match self {
+            #[cfg(feature = "rocksdb")]
+            DBConnection::Nonconcurrent(_) => {
+                panic!(
+                    "Cannot clone Nonconcurrent DBConnection (contains MutexGuard). This should never happen in normal operation as Nonconcurrent connections should not be used with Axum Extensions."
+                )
+            }
+            DBConnection::Concurrent(db) => DBConnection::Concurrent(db.clone()),
+        }
+    }
 }
 
 impl std::ops::Deref for DBConnection {
@@ -262,8 +277,21 @@ pub(crate) async fn resources_db(
     Ok(DBConnection::Concurrent(db))
 }
 
+/// Creates production `AppState` with global database connections.
+#[instrument]
+pub async fn create_production_state() -> AppState {
+    let resources_db_factory = Arc::new(GlobalResourcesDbFactory);
+    let auth_provider = Arc::new(crate::auth::RealAuthProvider);
+
+    AppState {
+        resources_db_factory,
+        auth_provider,
+    }
+}
+
 #[instrument(err, skip_all)]
 pub(crate) async fn dashboard_auth_account(
+    State(state): State<AppState>,
     Extension(auth): Extension<DashboardAuth>,
     Path(params): Path<HashMap<String, String>>,
     mut req: Request,
@@ -275,8 +303,11 @@ pub(crate) async fn dashboard_auth_account(
 
     auth.validate_account_access(account_id).await?;
 
-    let account = accounts_db()
-        .await?
+    let accounts_db = state
+        .resources_db_factory
+        .create_accounts_connection()
+        .await?;
+    let account = accounts_db
         .get_account_by_id(account_id.to_owned())
         .await?
         .check_first_real_error()?
@@ -287,20 +318,46 @@ pub(crate) async fn dashboard_auth_account(
         not_found!("Account not found");
     };
 
-    req.extensions_mut().insert(account);
+    #[cfg(feature = "archodex-com")]
+    let resources_db = state
+        .resources_db_factory
+        .create_resources_connection(account.id(), account.service_data_surrealdb_url())
+        .await?;
+
+    #[cfg(not(feature = "archodex-com"))]
+    let resources_db = state
+        .resources_db_factory
+        .create_resources_connection(account_id, None)
+        .await?;
+
+    let authed = AuthedAccount {
+        account,
+        resources_db,
+    };
+
+    req.extensions_mut().insert(authed);
 
     Ok(next.run(req).await)
 }
 
 #[instrument(err, skip_all)]
 pub(crate) async fn report_api_key_account(
-    Extension(auth): Extension<ReportApiKeyAuth>,
+    State(state): State<AppState>,
     mut req: Request,
     next: Next,
 ) -> Result<Response> {
-    let account = accounts_db()
-        .await?
-        .get_account_by_id(auth.account_id().to_owned())
+    let auth_context = state
+        .auth_provider
+        .authenticate(req.headers())
+        .await
+        .context("Authentication failed")?;
+
+    let accounts_db = state
+        .resources_db_factory
+        .create_accounts_connection()
+        .await?;
+    let account = accounts_db
+        .get_account_by_id(auth_context.account_id.clone())
         .await?
         .check_first_real_error()?
         .take::<Option<Account>>(0)
@@ -310,10 +367,28 @@ pub(crate) async fn report_api_key_account(
         not_found!("Account not found");
     };
 
-    auth.validate_account_access(&*(account.resources_db().await?))
+    #[cfg(feature = "archodex-com")]
+    let resources_db = state
+        .resources_db_factory
+        .create_resources_connection(account.id(), account.service_data_surrealdb_url())
         .await?;
 
-    req.extensions_mut().insert(account);
+    #[cfg(not(feature = "archodex-com"))]
+    let resources_db = state
+        .resources_db_factory
+        .create_resources_connection(&auth_context.account_id, None)
+        .await?;
+
+    let auth =
+        ReportApiKeyAuth::from_credentials(auth_context.account_id.clone(), auth_context.key_id);
+    auth.validate_account_access(&resources_db).await?;
+
+    let authed = AuthedAccount {
+        account,
+        resources_db,
+    };
+
+    req.extensions_mut().insert(authed);
 
     Ok(next.run(req).await)
 }

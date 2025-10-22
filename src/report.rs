@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::any::Any,
     method::Query,
@@ -13,14 +13,14 @@ use tracing::{info, instrument};
 
 use crate::{
     Result,
-    account::Account,
+    account::AuthedAccount,
     db::QueryCheckFirstRealError,
     next_binding,
     resource::{ResourceId, ResourceIdPart, surrealdb_thing_from_resource_id},
     value::surrealdb_value_from_json_value,
 };
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Principal {
     id: ResourceId,
@@ -49,7 +49,7 @@ fn surrealdb_value_from_principal_chain(principal_chain: Vec<Principal>) -> surr
 
 // TODO: Implement deserializer to handle unknown fields. Serde's built-in
 // unknown field handling doesn't work with its flatten option.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct ResourceTreeNode {
     #[serde(flatten)]
     id: ResourceIdPart,
@@ -60,7 +60,7 @@ struct ResourceTreeNode {
     contains: Option<Vec<ResourceTreeNode>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Event {
     r#type: String,
@@ -68,7 +68,7 @@ struct Event {
     last_seen_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct EventCapture {
     principals: Vec<Principal>,
@@ -76,7 +76,7 @@ struct EventCapture {
     events: Vec<Event>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Request {
     resource_captures: Vec<ResourceTreeNode>,
@@ -287,12 +287,17 @@ fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, A
     query
 }
 
-#[instrument(err, skip(account))]
+#[instrument(err, skip(authed))]
 pub(crate) async fn report(
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
     Json(req): Json<Request>,
 ) -> Result<()> {
-    let db = account.resources_db().await?;
+    let db = &authed.resources_db;
+
+    info!(
+        "Received report payload: {}",
+        serde_json::to_string_pretty(&req).unwrap_or_else(|e| format!("Failed to serialize: {e}"))
+    );
 
     let mut query = db.query(BeginStatement::default());
 

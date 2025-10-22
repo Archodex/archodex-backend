@@ -4,7 +4,7 @@ use tracing::instrument;
 
 use crate::{
     Result,
-    account::Account,
+    account::AuthedAccount,
     db::{BeginReadonlyStatement, QueryCheckFirstRealError},
     event::Event,
     global_container::GlobalContainer,
@@ -30,7 +30,7 @@ pub(super) struct QueryResponse {
 #[instrument(err, skip_all)]
 pub(super) async fn query(
     Path((_account_id, r#type)): Path<(String, QueryType)>,
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
 ) -> Result<Json<QueryResponse>> {
     const BEGIN: &str = "LET $resources: set<object> = []; LET $events: set<object> = [];";
 
@@ -45,10 +45,10 @@ pub(super) async fn query(
             ).distinct()
         ),
     };
-    
+
     COMMIT;";
 
-    let db = account.resources_db().await?;
+    let db = &authed.resources_db;
 
     let query = match r#type {
         QueryType::All => db

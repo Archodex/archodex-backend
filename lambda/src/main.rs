@@ -38,7 +38,7 @@ fn main() -> Result<(), io::Error> {
 
     // Run the lambda runtime worker thread to completion. The response is sent to the other "runtime" to be processed as needed.
     thread::spawn(move || {
-        let router = archodex_backend::router::router();
+        let router = tokio_runtime.block_on(archodex_backend::router::router());
         if let Ok(response) = tokio_runtime.block_on(lambda_http::run(router)) {
             lambda_tx
                 .send_blocking(response)
