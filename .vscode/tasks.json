@@ -26,7 +26,15 @@
       "label": "Run unit tests",
       "type": "cargo",
       "command": "test",
-      "args": ["-p", "archodex-backend", "--lib"],
+      "args": ["-p", "archodex-backend", "--lib", "${input:libName}"],
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
+      "label": "Run unit tests (with output)",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend", "--lib", "${input:libName}", "--", "--nocapture"],
       "problemMatcher": ["$rustc"],
       "group": "test"
     },
@@ -67,6 +75,12 @@
       "id": "testName",
       "type": "promptString",
       "description": "Test name or pattern to run",
+      "default": ""
+    },
+    {
+      "id": "libName",
+      "type": "promptString",
+      "description": "Library name to run (leave blank for all)",
       "default": ""
     }
   ]
