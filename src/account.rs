@@ -119,6 +119,13 @@ impl Account {
         self.service_data_surrealdb_url.as_deref()
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn salt(&self) -> &[u8] {
+        &self.salt
+    }
+
+    #[cfg(not(any(test, feature = "test-support")))]
     pub(crate) fn salt(&self) -> &[u8] {
         &self.salt
     }

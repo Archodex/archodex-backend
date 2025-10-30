@@ -43,6 +43,7 @@ use async_trait::async_trait;
 ///     // Make requests to router, which will use injected databases
 /// }
 /// ```
+#[derive(Debug)]
 pub struct TestResourcesDbFactory {
     /// Pre-configured accounts database connection
     pub accounts_db: DBConnection,

@@ -21,7 +21,7 @@ use tracing::{Instrument as _, error_span, info, instrument, warn};
 
 use crate::{
     Result,
-    db::{QueryCheckFirstRealError, accounts_db},
+    db::{DBConnection, QueryCheckFirstRealError},
     env::Env,
     report_api_key::{ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
@@ -174,9 +174,12 @@ impl DashboardAuth {
     }
 
     #[instrument]
-    pub(crate) async fn validate_account_access(&self, account_id: &str) -> Result<()> {
-        if accounts_db()
-            .await?
+    pub(crate) async fn validate_account_access(
+        &self,
+        account_id: &str,
+        accounts_db: &DBConnection,
+    ) -> Result<()> {
+        if accounts_db
             .query("SELECT 1 FROM $user->has_access->(account WHERE record::id(id) == $account_id)")
             .bind(("user", surrealdb::sql::Thing::from(&self.principal)))
             .bind(("account_id", account_id.to_string()))

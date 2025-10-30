@@ -150,6 +150,7 @@ async fn get_concurrent_db_connection(url: &str) -> anyhow::Result<Surreal<Any>>
         .clone())
 }
 
+#[derive(Debug)]
 pub enum DBConnection {
     #[cfg(feature = "rocksdb")]
     Nonconcurrent(tokio::sync::MappedMutexGuard<'static, Surreal<Any>>),
@@ -301,12 +302,14 @@ pub(crate) async fn dashboard_auth_account(
         .get("account_id")
         .expect(":account_id should be in path for dashboard account authentication");
 
-    auth.validate_account_access(account_id).await?;
-
     let accounts_db = state
         .resources_db_factory
         .create_accounts_connection()
         .await?;
+
+    auth.validate_account_access(account_id, &accounts_db)
+        .await?;
+
     let account = accounts_db
         .get_account_by_id(account_id.to_owned())
         .await?
@@ -348,7 +351,7 @@ pub(crate) async fn report_api_key_account(
 ) -> Result<Response> {
     let auth_context = state
         .auth_provider
-        .authenticate(req.headers())
+        .authenticate(req.headers(), &*state.resources_db_factory)
         .await
         .context("Authentication failed")?;
 
@@ -356,6 +359,7 @@ pub(crate) async fn report_api_key_account(
         .resources_db_factory
         .create_accounts_connection()
         .await?;
+
     let account = accounts_db
         .get_account_by_id(auth_context.account_id.clone())
         .await?

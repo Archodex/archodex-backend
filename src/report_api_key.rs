@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 use archodex_error::anyhow::{self, Context as _, anyhow, bail, ensure};
 use tracing::instrument;
 
-use crate::{env::Env, next_binding, surrealdb_deserializers, user::User};
+use crate::{db::DBConnection, env::Env, next_binding, surrealdb_deserializers, user::User};
 
 #[derive(Clone, Debug, Deserialize)]
-pub(crate) struct ReportApiKey {
+pub struct ReportApiKey {
     #[serde(deserialize_with = "surrealdb_deserializers::u32::deserialize")]
     id: u32,
     description: Option<String>,
@@ -49,7 +49,8 @@ impl From<ReportApiKey> for ReportApiKeyPublic {
 }
 
 impl ReportApiKey {
-    pub(crate) fn new(description: Option<String>, created_by: User) -> Self {
+    #[must_use]
+    pub fn new(description: Option<String>, created_by: User) -> Self {
         Self {
             id: rand::thread_rng().gen_range::<u32, _>(100_000..=999_999),
             description,
@@ -60,17 +61,26 @@ impl ReportApiKey {
         }
     }
 
-    pub(crate) fn id(&self) -> u32 {
+    #[must_use]
+    pub fn id(&self) -> u32 {
         self.id
     }
 
+    /// Generates an encrypted API key value string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `account_id` cannot be parsed as a valid u64
+    /// - Encryption of the account ID fails
     #[instrument(err)]
-    pub(crate) async fn generate_value(
+    pub async fn generate_value(
         &self,
         account_id: &str,
         account_salt: Vec<u8>,
+        accounts_db: Option<&DBConnection>,
     ) -> anyhow::Result<String> {
-        let cipher = Aes128Gcm::new(&Env::api_private_key().await);
+        let cipher = Aes128Gcm::new(&Env::api_private_key(accounts_db).await);
         let nonce = Aes128Gcm::generate_nonce(&mut rand::rngs::OsRng);
 
         let message = proto::ReportApiKeyEncryptedContents {
@@ -114,11 +124,24 @@ impl ReportApiKey {
         ))
     }
 
-    // This method validates a report key value contains the correct endpoint and returns the account and key IDs. The
-    // caller must still validate the key ID exists for the account and has not been revoked.
+    /// Validates a report key value and extracts the account ID and key ID.
+    ///
+    /// This method validates that a report key value contains the correct endpoint and returns
+    /// the account and key IDs. The caller must still validate the key ID exists for the account
+    /// and has not been revoked.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the key value is invalid due to:
+    /// - Format: missing prefix, invalid separator, malformed base64/protobuf
+    /// - Key ID: not a number or out of range (100000-999999)
+    /// - Endpoint: mismatch with current environment (archodex-com only)
+    /// - Encryption: invalid salt length, decryption failure, or tampered data
+    /// - Account ID: out of range (must be >= 1000000000)
     #[instrument(err, skip_all)]
-    pub(crate) async fn validate_value(
+    pub async fn validate_value(
         report_api_key_value: &str,
+        accounts_db: Option<&DBConnection>,
     ) -> anyhow::Result<(String, u32)> {
         let Some(key_id) = report_api_key_value.strip_prefix("archodex_report_api_key_") else {
             bail!("Invalid report key value: Missing prefix");
@@ -175,7 +198,7 @@ impl ReportApiKey {
         );
 
         let nonce = aead::Nonce::<Aes128Gcm>::from_slice(&value.nonce);
-        let cipher = Aes128Gcm::new(&Env::api_private_key().await);
+        let cipher = Aes128Gcm::new(&Env::api_private_key(accounts_db).await);
 
         let aad = proto::ReportApiKeyEncryptedAad {
             key_id,
@@ -303,5 +326,101 @@ impl From<&ReportApiKey> for surrealdb::sql::Thing {
             "report_api_key",
             surrealdb::sql::Id::Number(i64::from(report_api_key.id)),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test 1: Invalid prefix rejection
+    #[tokio::test]
+    async fn test_validate_value_invalid_prefix() {
+        let result = ReportApiKey::validate_value("invalid_prefix_123456_abc", None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing prefix"));
+    }
+
+    /// Test 2: Invalid format (missing underscore separator after `key_id`)
+    #[tokio::test]
+    async fn test_validate_value_invalid_format_missing_separator() {
+        let result = ReportApiKey::validate_value("archodex_report_api_key_123456", None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid format"));
+    }
+
+    /// Test 3: Key ID not a number
+    #[tokio::test]
+    async fn test_validate_value_key_id_not_a_number() {
+        let result =
+            ReportApiKey::validate_value("archodex_report_api_key_abc_dGVzdA==", None).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Key ID is not a number")
+        );
+    }
+
+    /// Test 4: Key ID out of range (< 100000)
+    #[tokio::test]
+    async fn test_validate_value_key_id_below_range() {
+        let result =
+            ReportApiKey::validate_value("archodex_report_api_key_99999_dGVzdA==", None).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Key ID is out of range")
+        );
+    }
+
+    /// Test 5: Key ID out of range (> 999999)
+    #[tokio::test]
+    async fn test_validate_value_key_id_above_range() {
+        let result =
+            ReportApiKey::validate_value("archodex_report_api_key_1000000_dGVzdA==", None).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Key ID is out of range")
+        );
+    }
+
+    /// Test 6: Base64 decode failure
+    #[tokio::test]
+    async fn test_validate_value_base64_decode_failure() {
+        let result =
+            ReportApiKey::validate_value("archodex_report_api_key_123456_!!!invalid!!!", None)
+                .await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to base64 decode")
+        );
+    }
+
+    /// Test 7: Protobuf decode failure (valid base64, invalid protobuf)
+    #[tokio::test]
+    async fn test_validate_value_protobuf_decode_failure() {
+        // "invalid_protobuf" encoded as base64
+        let result = ReportApiKey::validate_value(
+            "archodex_report_api_key_123456_aW52YWxpZF9wcm90b2J1Zg==",
+            None,
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to decode report key value as protobuf")
+        );
     }
 }

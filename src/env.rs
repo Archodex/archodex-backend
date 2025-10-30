@@ -148,7 +148,9 @@ impl Env {
         Self::get().cognito_client_id.as_str()
     }
 
-    pub(crate) async fn api_private_key() -> aes_gcm::Key<aes_gcm::Aes128Gcm> {
+    pub(crate) async fn api_private_key(
+        accounts_db_conn: Option<&crate::db::DBConnection>,
+    ) -> aes_gcm::Key<aes_gcm::Aes128Gcm> {
         // In self-hosted mode we use either the API private key material from the ARCHODEX_API_PRIVATE_KEY environment
         // variable or from the account database record. If neither exists we panic. If both exist we also panic, as
         // this is almost certainly a misconfiguration.
@@ -160,10 +162,7 @@ impl Env {
         {
             use serde::Deserialize;
 
-            use crate::{
-                db::{QueryCheckFirstRealError as _, accounts_db},
-                surrealdb_deserializers,
-            };
+            use crate::{db::QueryCheckFirstRealError as _, surrealdb_deserializers};
 
             #[derive(Deserialize)]
             struct ApiPrivateKeyResult {
@@ -183,18 +182,40 @@ impl Env {
                 return *api_private_key;
             }
 
-            let api_private_key_from_db = accounts_db()
-                .await
-                .expect("should be able to connect to accounts database")
-                .query("SELECT api_private_key FROM account WHERE deleted_at IS NONE LIMIT 1")
-                .await
-                .expect("should be able to query accounts database")
-                .check_first_real_error()
-                .expect("should be able to check query errors")
-                .take::<Option<ApiPrivateKeyResult>>(0)
-                .expect("should be able to take first result")
-                .expect("should be able to extract api_private_key from result")
-                .api_private_key;
+            let api_private_key_from_db = {
+                let db_conn = accounts_db_conn
+                    .expect("accounts_db_conn is required in non-archodex-com builds");
+
+                match db_conn {
+                    crate::db::DBConnection::Concurrent(db) => {
+                        db.query(
+                            "SELECT api_private_key FROM account WHERE deleted_at IS NONE LIMIT 1",
+                        )
+                        .await
+                        .expect("should be able to query accounts database")
+                        .check_first_real_error()
+                        .expect("should be able to check query errors")
+                        .take::<Option<ApiPrivateKeyResult>>(0)
+                        .expect("should be able to take first result")
+                        .expect("should be able to extract api_private_key from result")
+                        .api_private_key
+                    }
+                    #[cfg(feature = "rocksdb")]
+                    crate::db::DBConnection::Nonconcurrent(db) => {
+                        db.query(
+                            "SELECT api_private_key FROM account WHERE deleted_at IS NONE LIMIT 1",
+                        )
+                        .await
+                        .expect("should be able to query accounts database")
+                        .check_first_real_error()
+                        .expect("should be able to check query errors")
+                        .take::<Option<ApiPrivateKeyResult>>(0)
+                        .expect("should be able to take first result")
+                        .expect("should be able to extract api_private_key from result")
+                        .api_private_key
+                    }
+                }
+            };
 
             let api_private_key_from_env = match std::env::var("ARCHODEX_API_PRIVATE_KEY") {
                 Ok(hex_bytes) => {
@@ -227,7 +248,6 @@ impl Env {
                 aes_gcm::Key::<aes_gcm::Aes128Gcm>::clone_from_slice(&api_private_key_bytes);
 
             lock.replace(api_private_key);
-
             api_private_key
         }
 
@@ -238,7 +258,7 @@ impl Env {
     }
 
     #[cfg(not(feature = "archodex-com"))]
-    pub(crate) async fn clear_api_private_key() {
+    pub async fn clear_api_private_key() {
         // Only clear generated private keys, which is the case when the ARCHODEX_API_PRIVATE_KEY env var is not set
         if std::env::var("ARCHODEX_API_PRIVATE_KEY").is_err() {
             Self::get().api_private_key.write().await.take();

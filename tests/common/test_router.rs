@@ -59,7 +59,7 @@ pub fn create_test_router() -> Router {
 ///     let resources_db = create_test_resources_db().await;
 ///
 ///     // Seed test account
-///     seed_test_account(&accounts_db, "test_acc_123").await;
+///     seed_test_account(&accounts_db, "test_acc_123", false).await;
 ///
 ///     // Create auth provider
 ///     let auth_provider = create_fixed_auth_provider("test_acc_123", 99999);

@@ -67,6 +67,7 @@ pub async fn create_test_resources_db() -> DBConnection {
 /// # Parameters
 /// * `db` - The accounts database connection
 /// * `account_id` - The ID to assign to the test account
+/// * `with_api_key` - Whether to include an `api_private_key` field for encryption tests
 ///
 /// # Examples
 ///
@@ -74,13 +75,13 @@ pub async fn create_test_resources_db() -> DBConnection {
 /// #[tokio::test]
 /// async fn test_with_seeded_account() {
 ///     let accounts_db = create_test_accounts_db().await;
-///     let account = seed_test_account(&accounts_db, "test_acc_123").await;
+///     let account = seed_test_account(&accounts_db, "test_acc_123", false).await;
 ///
 ///     // Account is now in database and can be loaded by auth middleware
 ///     assert_eq!(account.id(), "test_acc_123");
 /// }
 /// ```
-pub async fn seed_test_account(db: &DBConnection, account_id: &str) -> Account {
+pub async fn seed_test_account(db: &DBConnection, account_id: &str, with_api_key: bool) -> Account {
     use rand::Rng;
 
     let salt: Vec<u8> = rand::thread_rng().r#gen::<[u8; 16]>().to_vec();
@@ -89,15 +90,29 @@ pub async fn seed_test_account(db: &DBConnection, account_id: &str) -> Account {
     // Insert account into database
     if let DBConnection::Concurrent(surreal_db) = db {
         use surrealdb::sql;
-        surreal_db
-            .query("CREATE $account CONTENT { salt: $salt, created_at: time::now() }")
-            .bind((
-                "account",
-                sql::Thing::from(("account", sql::Id::String(account_id.to_string()))),
-            ))
-            .bind(("salt", sql::Bytes::from(salt)))
-            .await
-            .expect("Failed to seed test account");
+
+        let query = if with_api_key {
+            // The API key must be 16 bytes for AES-128
+            let api_key_bytes = vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+            surreal_db
+                .query("CREATE $account CONTENT { salt: $salt, api_private_key: $api_key, created_at: time::now() }")
+                .bind((
+                    "account",
+                    sql::Thing::from(("account", sql::Id::String(account_id.to_string()))),
+                ))
+                .bind(("salt", sql::Bytes::from(salt)))
+                .bind(("api_key", sql::Bytes::from(api_key_bytes)))
+        } else {
+            surreal_db
+                .query("CREATE $account CONTENT { salt: $salt, created_at: time::now() }")
+                .bind((
+                    "account",
+                    sql::Thing::from(("account", sql::Id::String(account_id.to_string()))),
+                ))
+                .bind(("salt", sql::Bytes::from(salt)))
+        };
+
+        query.await.expect("Failed to seed test account");
     } else {
         panic!("seed_test_account only works with Concurrent DBConnection");
     }

@@ -57,7 +57,7 @@ async fn test_middleware_invalid_api_key_rejected_with_injected_db() {
     // Create the account record but NOT the API key
     let account_id = "test_acc_no_key";
     let key_id = 88888;
-    let _account = common::seed_test_account(&accounts_db, account_id).await;
+    let _account = common::seed_test_account(&accounts_db, account_id, false).await;
     // NOTE: NOT calling seed_test_api_key() so key won't exist in database
 
     let auth_provider = common::create_fixed_auth_provider(account_id, key_id);
@@ -93,7 +93,7 @@ async fn test_middleware_loads_account_from_injected_database() {
     // Create test account record
     let account_id = "test_acc_456";
     let key_id = 99999;
-    let _account = common::seed_test_account(&accounts_db, account_id).await;
+    let _account = common::seed_test_account(&accounts_db, account_id, false).await;
 
     // Add test API key record
     common::seed_test_api_key(&resources_db, key_id).await;
@@ -151,7 +151,7 @@ async fn test_middleware_uses_resources_db_factory() {
     // Create test account record
     let account_id = "test_acc_789";
     let key_id = 99999;
-    let _account = common::seed_test_account(&accounts_db, account_id).await;
+    let _account = common::seed_test_account(&accounts_db, account_id, false).await;
 
     // Add test API key record
     common::seed_test_api_key(&resources_db, key_id).await;

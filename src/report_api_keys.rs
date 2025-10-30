@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use axum::{Extension, Json, extract::Path};
+use axum::{
+    Extension, Json,
+    extract::{Path, State},
+};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
@@ -12,6 +15,7 @@ use crate::{
     auth::DashboardAuth,
     db::QueryCheckFirstRealError,
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
+    state::AppState,
 };
 
 #[derive(Serialize)]
@@ -49,6 +53,7 @@ pub(crate) struct CreateReportApiKeyResponse {
 
 #[instrument(err, skip(auth, authed))]
 pub(crate) async fn create_report_api_key(
+    State(state): State<AppState>,
     Extension(auth): Extension<DashboardAuth>,
     Extension(authed): Extension<AuthedAccount>,
     Path(params): Path<HashMap<String, String>>,
@@ -58,9 +63,18 @@ pub(crate) async fn create_report_api_key(
         bail!("Missing account ID");
     };
 
+    let accounts_db = state
+        .resources_db_factory
+        .create_accounts_connection()
+        .await?;
+
     let report_api_key = ReportApiKey::new(req.description, auth.principal().clone());
     let report_api_key_value = report_api_key
-        .generate_value(account_id, authed.account.salt().to_owned())
+        .generate_value(
+            account_id,
+            authed.account.salt().to_owned(),
+            Some(&accounts_db),
+        )
         .await?;
 
     let db = &authed.resources_db;

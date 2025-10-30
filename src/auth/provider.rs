@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use axum::http::{HeaderMap, header::AUTHORIZATION};
+use std::fmt::Debug;
 use tracing::instrument;
 
 use archodex_error::anyhow::{self, Context as _};
 
-use crate::report_api_key::ReportApiKey;
+use crate::{report_api_key::ReportApiKey, state::ResourcesDbFactory};
 
 /// Authentication context containing validated account and key IDs.
 #[derive(Clone, Debug)]
@@ -17,19 +18,27 @@ pub struct AuthContext {
 ///
 /// Abstracts authentication to allow production validation and test injection.
 #[async_trait]
-pub trait AuthProvider: Send + Sync + 'static {
+pub trait AuthProvider: Send + Sync + Debug + 'static {
     /// Validates authentication credentials and returns context.
-    async fn authenticate(&self, headers: &HeaderMap) -> anyhow::Result<AuthContext>;
+    async fn authenticate(
+        &self,
+        headers: &HeaderMap,
+        resources_db_factory: &dyn ResourcesDbFactory,
+    ) -> anyhow::Result<AuthContext>;
 }
 
 /// Production authentication using API key validation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RealAuthProvider;
 
 #[async_trait]
 impl AuthProvider for RealAuthProvider {
     #[instrument(err, skip_all)]
-    async fn authenticate(&self, headers: &HeaderMap) -> anyhow::Result<AuthContext> {
+    async fn authenticate(
+        &self,
+        headers: &HeaderMap,
+        resources_db_factory: &dyn ResourcesDbFactory,
+    ) -> anyhow::Result<AuthContext> {
         let header_value = headers
             .get(AUTHORIZATION)
             .context("Missing Authorization header")?;
@@ -38,7 +47,8 @@ impl AuthProvider for RealAuthProvider {
             .to_str()
             .context("Failed to parse Authorization header")?;
 
-        let (account_id, key_id) = ReportApiKey::validate_value(header_str)
+        let accounts_db = resources_db_factory.create_accounts_connection().await?;
+        let (account_id, key_id) = ReportApiKey::validate_value(header_str, Some(&accounts_db))
             .await
             .context("Failed to validate API key")?;
 
@@ -54,7 +64,7 @@ impl AuthProvider for RealAuthProvider {
 /// let state = AppState { auth_provider, /* ... */ };
 /// ```
 #[cfg(any(test, feature = "test-support"))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FixedAuthProvider {
     context: AuthContext,
 }
@@ -75,7 +85,11 @@ impl FixedAuthProvider {
 #[cfg(any(test, feature = "test-support"))]
 #[async_trait]
 impl AuthProvider for FixedAuthProvider {
-    async fn authenticate(&self, _headers: &HeaderMap) -> anyhow::Result<AuthContext> {
+    async fn authenticate(
+        &self,
+        _headers: &HeaderMap,
+        _resources_db_factory: &dyn ResourcesDbFactory,
+    ) -> anyhow::Result<AuthContext> {
         Ok(self.context.clone())
     }
 }

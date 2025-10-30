@@ -1,19 +1,21 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use tracing::instrument;
 
+#[cfg(not(feature = "archodex-com"))]
+use crate::env::Env;
 use crate::{
     auth::AuthProvider,
     db::{DBConnection, accounts_db, resources_db},
-    env::Env,
 };
+
 use archodex_error::anyhow;
 
 /// Application state for dependency injection.
 ///
 /// Holds database factories and auth providers for testing and production.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AppState {
     /// Factory for creating per-account resources database connections
     pub resources_db_factory: Arc<dyn ResourcesDbFactory + Send + Sync>,
@@ -30,7 +32,7 @@ pub struct AppState {
 /// - `service_url`: Optional custom `SurrealDB` URL (None uses default from environment)
 
 #[async_trait]
-pub trait ResourcesDbFactory {
+pub trait ResourcesDbFactory: Send + Sync + Debug {
     async fn create_accounts_connection(&self) -> anyhow::Result<DBConnection>;
 
     async fn create_resources_connection(
@@ -41,6 +43,7 @@ pub trait ResourcesDbFactory {
 }
 
 /// Production implementation using global connection pools.
+#[derive(Debug)]
 pub struct GlobalResourcesDbFactory;
 
 #[async_trait]
