@@ -17,6 +17,8 @@ async fn init() {
             "000102030405060708090a0b0c0d0e0f",
         );
     });
+
+    #[cfg(not(feature = "archodex-com"))]
     Env::force_clear_api_private_key().await;
 }
 

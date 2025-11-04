@@ -275,7 +275,7 @@ impl Env {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(all(any(test, feature = "test-support"), not(feature = "archodex-com")))]
     pub async fn force_clear_api_private_key() {
         Self::get().api_private_key.write().await.take();
     }
