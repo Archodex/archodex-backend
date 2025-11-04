@@ -12,6 +12,49 @@
       "label": "rust: cargo build"
     },
     {
+      "label": "Run all tests",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend"],
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Run unit tests",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend", "--lib", "${input:libName}"],
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
+      "label": "Run unit tests (with output)",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend", "--lib", "${input:libName}", "--", "--nocapture"],
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
+      "label": "Run integration tests",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend", "--test", "*"],
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
+      "label": "Run specific test (with output)",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "archodex-backend", "${input:testName}", "--", "--nocapture"],
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
       "type": "shell",
       "command": "surreal sql --endpoint rocksdb://db --namespace archodex --pretty --multi",
       "problemMatcher": [],
@@ -25,6 +68,20 @@
         "kind": "build"
       },
       "label": "act: Run GitHub Actions Workflow build-dev.yml to build arm container image"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testName",
+      "type": "promptString",
+      "description": "Test name or pattern to run",
+      "default": ""
+    },
+    {
+      "id": "libName",
+      "type": "promptString",
+      "description": "Library name to run (leave blank for all)",
+      "default": ""
     }
   ]
 }

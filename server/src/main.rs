@@ -136,7 +136,9 @@ fn main() -> anyhow::Result<()> {
 
             info!("Listening on port {port}");
 
-            axum::serve(listener, archodex_backend::router::router())
+            let router = archodex_backend::router::router().await;
+
+            axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;
 

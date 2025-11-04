@@ -9,7 +9,7 @@
     "type=volume,source=archodex-dev-apt-lists,target=/var/lib/apt/lists",
     "type=volume,source=archodex-dev-rustup,target=/usr/local/rustup",
     // Cache cargo artifacts to speed up builds across container rebuilds
-    "type=volume,source=archodex-dev-cargo-registry,target=/usr/local/cargo/registry",
+    "type=volume,source=archodex-backend-dev-cargo-registry,target=/usr/local/cargo/registry",
     "type=volume,source=archodex-backend-dev-cargo-git,target=/usr/local/cargo/git",
     "type=volume,source=archodex-backend-dev-target,target=/workspaces/archodex-backend/target"
   ],
@@ -28,6 +28,8 @@
   },
   "postCreateCommand": ".devcontainer/init.sh",
   "postStartCommand": ".devcontainer/start.sh",
+  "runArgs": ["--publish", "5731:5731"],
+  "forwardPorts": [5731],
   "customizations": {
     "vscode": {
       "extensions": [

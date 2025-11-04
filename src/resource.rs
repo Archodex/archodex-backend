@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use archodex_error::{anyhow, bail, ensure};
 use tracing::instrument;
 
-use crate::account::Account;
+use crate::account::AuthedAccount;
 
 #[derive(Clone, Debug, Eq, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +137,27 @@ impl<'de> Deserialize<'de> for ResourceIdPart {
 
 #[derive(Clone, Debug, Eq, Serialize, PartialEq)]
 pub(crate) struct ResourceId(Vec<ResourceIdPart>);
+
+#[cfg(test)]
+impl TryFrom<Vec<(&str, &str)>> for ResourceId {
+    type Error = anyhow::Error;
+
+    /// Creates a `ResourceId` from a vector of (type, id) string pairs for testing
+    fn try_from(parts: Vec<(&str, &str)>) -> Result<Self, Self::Error> {
+        let array = surrealdb::sql::Array::from(
+            parts
+                .into_iter()
+                .map(|(r#type, id)| {
+                    surrealdb::sql::Value::Array(surrealdb::sql::Array::from(vec![
+                        surrealdb::sql::Value::Strand(r#type.into()),
+                        surrealdb::sql::Value::Strand(id.into()),
+                    ]))
+                })
+                .collect::<Vec<_>>(),
+        );
+        ResourceId::try_from(array)
+    }
+}
 
 impl std::ops::Deref for ResourceId {
     type Target = Vec<ResourceIdPart>;
@@ -308,17 +329,16 @@ pub(super) struct SetTagsRequest {
     environments: HashSet<String>,
 }
 
-#[instrument(err, skip(account))]
+#[instrument(err, skip(authed))]
 pub(super) async fn set_environments(
-    Extension(account): Extension<Account>,
+    Extension(authed): Extension<AuthedAccount>,
     Json(req): Json<SetTagsRequest>,
 ) -> crate::Result<()> {
     const QUERY: &str =
         "BEGIN; UPDATE resource SET environments = $envs WHERE id = $resource_id; COMMIT;";
 
-    account
-        .resources_db()
-        .await?
+    authed
+        .resources_db
         .query(QUERY)
         .bind(("envs", req.environments))
         .bind((
@@ -328,4 +348,130 @@ pub(super) async fn set_environments(
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test 1: Round-trip conversion `ResourceId` -> `SurrealDB Array` -> `ResourceId`
+    #[test]
+    fn test_resource_id_round_trip_conversion() {
+        let original =
+            ResourceId::try_from(vec![("partition", "aws"), ("account", "123456789012")]).unwrap();
+
+        // Convert to SurrealDB Array
+        let surreal_array: surrealdb::sql::Array = original.clone().into();
+
+        // Convert back to ResourceId
+        let parsed = ResourceId::try_from(surreal_array).unwrap();
+
+        assert_eq!(parsed, original);
+    }
+
+    /// Test 2: `ResourceIdPart` array length validation (must be exactly 2 elements)
+    #[test]
+    fn test_resource_id_part_invalid_array_length_single_element() {
+        let array = surrealdb::sql::Array::from(vec![surrealdb::sql::Value::Strand("aws".into())]);
+
+        let result = ResourceIdPart::try_from(array);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("with a length other than two")
+        );
+    }
+
+    /// Test 3: `ResourceIdPart` array length validation (too many elements)
+    #[test]
+    fn test_resource_id_part_invalid_array_length_three_elements() {
+        let array = surrealdb::sql::Array::from(vec![
+            surrealdb::sql::Value::Strand("partition".into()),
+            surrealdb::sql::Value::Strand("aws".into()),
+            surrealdb::sql::Value::Strand("extra".into()),
+        ]);
+
+        let result = ResourceIdPart::try_from(array);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("with a length other than two")
+        );
+    }
+
+    /// Test 4: `ResourceId` invalid `RecordId` handling (non-array element in parts)
+    #[test]
+    fn test_resource_id_non_array_part() {
+        let array = surrealdb::sql::Array::from(vec![
+            surrealdb::sql::Value::Strand("not_an_array".into()), // Should be Array
+        ]);
+
+        let result = ResourceId::try_from(array);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("with a non-array ResourceIdPart element")
+        );
+    }
+
+    /// Test 5: `ResourceIdPart` malformed part data (non-strand type element)
+    #[test]
+    fn test_resource_id_part_non_strand_type() {
+        let array = surrealdb::sql::Array::from(vec![
+            surrealdb::sql::Value::from(123), // Should be Strand
+            surrealdb::sql::Value::Strand("aws".into()),
+        ]);
+
+        let result = ResourceIdPart::try_from(array);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("with a non-strand first element")
+        );
+    }
+
+    /// Test 6: `ResourceIdPart` malformed part data (non-strand id element)
+    #[test]
+    fn test_resource_id_part_non_strand_id() {
+        let array = surrealdb::sql::Array::from(vec![
+            surrealdb::sql::Value::Strand("partition".into()),
+            surrealdb::sql::Value::from(123), // Should be Strand
+        ]);
+
+        let result = ResourceIdPart::try_from(array);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("with a non-strand second element")
+        );
+    }
+
+    /// Test 7: `ResourceId` with multiple parts (hierarchical resource)
+    #[test]
+    fn test_resource_id_multiple_parts() {
+        let original = ResourceId::try_from(vec![
+            ("partition", "aws"),
+            ("account", "123456789012"),
+            ("region", "us-east-1"),
+            ("service", "s3"),
+        ])
+        .unwrap();
+
+        assert_eq!(original.len(), 4);
+
+        let surreal_array: surrealdb::sql::Array = original.clone().into();
+        let parsed = ResourceId::try_from(surreal_array).unwrap();
+
+        assert_eq!(parsed, original);
+    }
 }
