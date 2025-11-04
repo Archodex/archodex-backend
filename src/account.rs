@@ -257,3 +257,53 @@ pub struct AuthedAccount {
     pub account: Account,
     pub resources_db: DBConnection,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Validates that `Account` serialization includes endpoint field in archodex-com mode
+    #[cfg(feature = "archodex-com")]
+    #[test]
+    fn test_account_public_includes_endpoint_in_archodex_com_mode() {
+        let account = Account {
+            id: "test-account-123".to_string(),
+            endpoint: "https://example.archodex.com".to_string(),
+            service_data_surrealdb_url: Some("ws://localhost:8000".to_string()),
+            salt: vec![1, 2, 3, 4],
+            created_at: None,
+            created_by: None,
+            deleted_at: None,
+            deleted_by: None,
+        };
+
+        let account_public = AccountPublic::from(account.clone());
+
+        let json = serde_json::to_value(&account_public).unwrap();
+
+        assert_eq!(json["id"], "test-account-123");
+        assert_eq!(json["endpoint"], "https://example.archodex.com");
+    }
+
+    /// Validates that `Account` serialization excludes endpoint field in self-hosted mode
+    #[cfg(not(feature = "archodex-com"))]
+    #[test]
+    fn test_account_public_excludes_endpoint_in_self_hosted_mode() {
+        let account = Account {
+            id: "test-account-456".to_string(),
+            salt: vec![5, 6, 7, 8],
+            api_private_key: Some(vec![9, 10, 11, 12]),
+            created_at: None,
+            created_by: None,
+            deleted_at: None,
+            deleted_by: None,
+        };
+
+        let account_public = AccountPublic::from(account);
+
+        let json = serde_json::to_value(&account_public).unwrap();
+
+        assert_eq!(json["id"], "test-account-456");
+        assert!(json.get("endpoint").is_none());
+    }
+}
