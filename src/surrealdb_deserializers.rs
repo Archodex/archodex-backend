@@ -242,3 +242,87 @@ pub(crate) mod bytes {
         deserializer.deserialize_option(OptionalVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde::Deserialize;
+
+    // Tests for string deserializer
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct TestString {
+        #[serde(deserialize_with = "super::string::deserialize")]
+        value: String,
+    }
+
+    #[test]
+    fn test_string_deserialize_direct_string() {
+        let json = r#"{"value": "test-string"}"#;
+        let result: TestString = serde_json::from_str(json).unwrap();
+        assert_eq!(result.value, "test-string");
+    }
+
+    // Tests for u32 deserializer
+    /// Validates that the u32 deserializer correctly rejects negative numbers
+    #[test]
+    fn test_u32_reject_negative_number() {
+        use super::u32;
+        use serde::de::value::{Error as ValueError, I64Deserializer};
+
+        let deserializer = I64Deserializer::<ValueError>::new(-5);
+        let result = u32::deserialize(deserializer);
+        assert!(result.is_err());
+    }
+
+    /// Validates that the u32 deserializer accepts zero
+    #[test]
+    fn test_u32_deserialize_zero() {
+        use super::u32;
+        use serde::de::value::{Error as ValueError, I64Deserializer};
+
+        let deserializer = I64Deserializer::<ValueError>::new(0);
+        let result = u32::deserialize(deserializer);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    /// Validates that the u32 deserializer accepts positive numbers
+    #[test]
+    fn test_u32_deserialize_positive_number() {
+        use super::u32;
+        use serde::de::value::{Error as ValueError, I64Deserializer};
+
+        let deserializer = I64Deserializer::<ValueError>::new(42);
+        let result = u32::deserialize(deserializer);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    // Tests for uuid deserializer
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct TestUuid {
+        #[serde(deserialize_with = "super::uuid::deserialize")]
+        value: surrealdb::Uuid,
+    }
+
+    #[test]
+    fn test_uuid_deserialize_from_string() {
+        let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
+        let json = format!(r#"{{"value": "{uuid_str}"}}"#);
+        let result: TestUuid = serde_json::from_str(&json).unwrap();
+        assert_eq!(result.value.to_string(), uuid_str);
+    }
+
+    #[test]
+    fn test_uuid_deserialize_invalid_string() {
+        let json = r#"{"value": "not-a-valid-uuid"}"#;
+        let result: Result<TestUuid, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_uuid_deserialize_empty_string() {
+        let json = r#"{"value": ""}"#;
+        let result: Result<TestUuid, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+}
