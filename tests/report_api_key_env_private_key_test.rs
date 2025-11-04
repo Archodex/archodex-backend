@@ -1,26 +1,30 @@
 // Integration tests for ReportApiKey encryption/decryption
 mod common;
 
-use archodex_backend::test_support::{ReportApiKey, User};
+use archodex_backend::test_support::{Env, ReportApiKey, User};
 use common::{create_test_accounts_db, seed_test_account};
+use serial_test::serial;
 
 use std::sync::Once;
 
 static INIT: Once = Once::new();
 
-fn init() {
+async fn init() {
     INIT.call_once(|| unsafe {
         std::env::set_var(
             "ARCHODEX_API_PRIVATE_KEY",
             "000102030405060708090a0b0c0d0e0f",
         );
     });
+    Env::force_clear_api_private_key().await;
 }
 
 /// Round-trip generate → validate with test DB and `ARCHODEX_API_PRIVATE_KEY` env var
+#[cfg(not(feature = "archodex-com"))]
 #[tokio::test]
+#[serial]
 async fn test_report_api_key_round_trip() {
-    init();
+    init().await;
 
     // Setup: Create test database and seed account without an api key
     let accounts_db = create_test_accounts_db().await;
@@ -50,10 +54,12 @@ async fn test_report_api_key_round_trip() {
     assert_eq!(key_id, report_api_key.id());
 }
 
+#[cfg(not(feature = "archodex-com"))]
 #[tokio::test]
+#[serial]
 #[should_panic(expected = "ARCHODEX_API_PRIVATE_KEY environment variable must not be set")]
 async fn test_panic_when_both_env_and_db_keys_exist() {
-    init();
+    init().await;
 
     let accounts_db = create_test_accounts_db().await;
     let account = seed_test_account(&accounts_db, "1000000000", true);

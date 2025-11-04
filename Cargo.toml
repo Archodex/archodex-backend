@@ -94,6 +94,7 @@ uuid = { version = "1.18.1", features = ["v7"] }
 
 [dev-dependencies]
 archodex-backend = { path = ".", features = ["test-support"] }
+serial_test = "3.1"
 tower = { version = "0.5", features = ["util"] }
 surrealdb = { version = "= 2.3.7", features = ["rustls", "kv-mem"] }
 

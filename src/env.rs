@@ -265,6 +265,11 @@ impl Env {
         }
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn force_clear_api_private_key() {
+        Self::get().api_private_key.write().await.take();
+    }
+
     #[cfg(feature = "archodex-com")]
     pub(crate) fn user_account_limit() -> u32 {
         5

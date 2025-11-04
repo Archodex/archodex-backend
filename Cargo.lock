@@ -203,6 +203,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "serial_test",
  "surrealdb",
  "tokio",
  "tower 0.5.2",
@@ -4628,6 +4629,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scc"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
+dependencies = [
+ "sdd",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4663,6 +4673,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "sdd"
+version = "3.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 
 [[package]]
 name = "seahash"
@@ -4819,6 +4835,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f1abbfe725f27678f4663bcacb75a83e829fd464c25d78dd038a3a29e307cec"
 dependencies = [
  "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "serial_test"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b258109f244e1d6891bf1053a55d63a5cd4f8f4c30cf9a1280989f80e7a1fa9"
+dependencies = [
+ "futures",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "scc",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
@@ -5092,11 +5133,13 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "surrealdb"
 version = "2.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5545940eb21920f4eb3fbdd4a805c68c9917e9ee95b805d7702c0a6cf61ed4d0"
+source = "git+https://github.com/Archodex/surrealdb.git#7b7079a33b57f741b1c10e56fd12a7fae42c50f1"
 dependencies = [
  "arrayvec",
  "async-channel",
+ "aws-config",
+ "aws-sdk-dynamodb",
+ "aws-smithy-types",
  "bincode",
  "chrono",
  "dmp",
@@ -5134,8 +5177,7 @@ dependencies = [
 [[package]]
 name = "surrealdb-core"
 version = "2.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04c0c3d3e8e8156a1f15e3f146b8e40d7a0197e89abea6c4aa0178d06d11e6d1"
+source = "git+https://github.com/Archodex/surrealdb.git#7b7079a33b57f741b1c10e56fd12a7fae42c50f1"
 dependencies = [
  "addr",
  "affinitypool",
@@ -5146,6 +5188,9 @@ dependencies = [
  "async-channel",
  "async-executor",
  "async-graphql",
+ "aws-config",
+ "aws-sdk-dynamodb",
+ "aws-smithy-types",
  "base64 0.21.7",
  "bcrypt",
  "bincode",
@@ -5212,6 +5257,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "tracing",
  "trice",
  "ulid",
