@@ -2,11 +2,13 @@
 mod common;
 
 use archodex_backend::test_support::{ReportApiKey, User, report_api_key::proto};
-use common::{create_test_accounts_db, seed_test_account};
+use common::{create_test_accounts_db, init_test_env, seed_test_account};
 
 /// Round-trip generate → validate with test DB
 #[tokio::test]
 async fn test_report_api_key_round_trip() {
+    init_test_env();
+
     // Setup: Create test database and seed account
     let accounts_db = create_test_accounts_db().await;
     let account = seed_test_account(&accounts_db, "1000000000", true).await;
@@ -38,8 +40,11 @@ async fn test_report_api_key_round_trip() {
 /// Out-of-range account ID in encrypted payload
 #[tokio::test]
 async fn test_report_api_key_invalid_account_id_out_of_range() {
+    init_test_env();
+
     // Setup: Create test database and seed account with invalid ID
     let accounts_db = create_test_accounts_db().await;
+
     let account = seed_test_account(&accounts_db, "999999999", true).await; // Below range
 
     let user = User::new_for_testing("test_user_123".to_string());
@@ -67,6 +72,8 @@ async fn test_report_api_key_invalid_account_id_out_of_range() {
 /// Invalid base64 in key value
 #[tokio::test]
 async fn test_report_api_key_invalid_base64() {
+    init_test_env();
+
     // Setup: Create test database
     let accounts_db = create_test_accounts_db().await;
 
@@ -92,6 +99,8 @@ async fn test_report_api_key_invalid_base64() {
 async fn test_report_api_key_invalid_salt_length() {
     use base64::prelude::*;
     use prost::Message;
+
+    init_test_env();
 
     // Setup: Create test database
     let accounts_db = create_test_accounts_db().await;
@@ -131,6 +140,8 @@ async fn test_report_api_key_invalid_salt_length() {
 async fn test_report_api_key_corrupted_ciphertext() {
     use base64::prelude::*;
     use prost::Message;
+
+    init_test_env();
 
     // Setup: Create test database
     let accounts_db = create_test_accounts_db().await;

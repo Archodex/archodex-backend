@@ -93,7 +93,13 @@ pub async fn seed_test_account(db: &DBConnection, account_id: &str, with_api_key
 
         let query = if with_api_key {
             // The API key must be 16 bytes for AES-128
-            let api_key_bytes = vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+            let api_key_bytes = if cfg!(feature = "archodex-com") {
+                // Use the same key as the mock in env.rs
+                hex::decode("000102030405060708090a0b0c0d0e0f").expect("test key decode")
+            } else {
+                vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+            };
+
             surreal_db
                 .query("CREATE $account CONTENT { salt: $salt, api_private_key: $api_key, created_at: time::now() }")
                 .bind((

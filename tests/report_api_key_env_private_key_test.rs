@@ -2,7 +2,7 @@
 mod common;
 
 use archodex_backend::test_support::{Env, ReportApiKey, User};
-use common::{create_test_accounts_db, seed_test_account};
+use common::{create_test_accounts_db, init_test_env, seed_test_account};
 use serial_test::serial;
 
 use std::sync::Once;
@@ -10,6 +10,7 @@ use std::sync::Once;
 static INIT: Once = Once::new();
 
 async fn init() {
+    init_test_env();
     INIT.call_once(|| unsafe {
         std::env::set_var(
             "ARCHODEX_API_PRIVATE_KEY",

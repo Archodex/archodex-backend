@@ -24,3 +24,27 @@ pub use db::{
 pub use fixtures::{create_simple_test_report_request, create_test_report_request};
 #[allow(unused_imports)]
 pub use test_router::{create_test_router, create_test_router_with_state};
+
+// General environment setup for all tests
+#[cfg(feature = "archodex-com")]
+use std::sync::Once;
+
+#[cfg(feature = "archodex-com")]
+static ARCHODEX_COM_INIT: Once = Once::new();
+
+#[cfg(feature = "archodex-com")]
+pub fn init_test_env() {
+    ARCHODEX_COM_INIT.call_once(|| unsafe {
+        std::env::set_var("ENDPOINT", "test.archodex.com");
+        std::env::set_var(
+            "ACCOUNTS_SURREALDB_URL",
+            "dynamodb://arn:aws:dynamodb:us-west-2:123456789000:table/",
+        )
+    });
+}
+
+#[cfg(not(feature = "archodex-com"))]
+#[allow(unused)]
+pub fn init_test_env() {
+    // No-op currently for self-hosted builds
+}

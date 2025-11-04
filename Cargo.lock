@@ -5133,13 +5133,11 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "surrealdb"
 version = "2.3.7"
-source = "git+https://github.com/Archodex/surrealdb.git#7b7079a33b57f741b1c10e56fd12a7fae42c50f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5545940eb21920f4eb3fbdd4a805c68c9917e9ee95b805d7702c0a6cf61ed4d0"
 dependencies = [
  "arrayvec",
  "async-channel",
- "aws-config",
- "aws-sdk-dynamodb",
- "aws-smithy-types",
  "bincode",
  "chrono",
  "dmp",
@@ -5177,7 +5175,8 @@ dependencies = [
 [[package]]
 name = "surrealdb-core"
 version = "2.3.7"
-source = "git+https://github.com/Archodex/surrealdb.git#7b7079a33b57f741b1c10e56fd12a7fae42c50f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04c0c3d3e8e8156a1f15e3f146b8e40d7a0197e89abea6c4aa0178d06d11e6d1"
 dependencies = [
  "addr",
  "affinitypool",
@@ -5188,9 +5187,6 @@ dependencies = [
  "async-channel",
  "async-executor",
  "async-graphql",
- "aws-config",
- "aws-sdk-dynamodb",
- "aws-smithy-types",
  "base64 0.21.7",
  "bcrypt",
  "bincode",
@@ -5257,7 +5253,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util",
  "tracing",
  "trice",
  "ulid",

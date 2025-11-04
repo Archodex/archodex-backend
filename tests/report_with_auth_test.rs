@@ -6,6 +6,7 @@
 // - report::report handler (business logic)
 
 mod common;
+use common::init_test_env;
 
 use axum::{
     body::Body,
@@ -15,6 +16,8 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_middleware_rejects_nonexistent_account() {
+    init_test_env();
+
     // Verify that middleware handles the case when account doesn't exist in database
 
     let accounts_db = common::create_test_accounts_db().await;
@@ -49,6 +52,8 @@ async fn test_middleware_rejects_nonexistent_account() {
 
 #[tokio::test]
 async fn test_middleware_invalid_api_key_rejected_with_injected_db() {
+    init_test_env();
+
     // Verify middleware validates API keys in the injected resources database
 
     let accounts_db = common::create_test_accounts_db().await;
@@ -85,6 +90,8 @@ async fn test_middleware_invalid_api_key_rejected_with_injected_db() {
 
 #[tokio::test]
 async fn test_middleware_loads_account_from_injected_database() {
+    init_test_env();
+
     // Verify middleware correctly accesses the injected accounts_db
 
     let accounts_db = common::create_test_accounts_db().await;
@@ -143,6 +150,8 @@ async fn test_middleware_loads_account_from_injected_database() {
 
 #[tokio::test]
 async fn test_middleware_uses_resources_db_factory() {
+    init_test_env();
+
     // Verify the factory pattern works correctly with injected databases
 
     let accounts_db = common::create_test_accounts_db().await;

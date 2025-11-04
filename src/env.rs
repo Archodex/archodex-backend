@@ -253,7 +253,17 @@ impl Env {
 
         #[cfg(feature = "archodex-com")]
         {
-            archodex_com::api_private_key().await.clone()
+            #[cfg(any(test, feature = "test-support"))]
+            {
+                let bytes =
+                    hex::decode("000102030405060708090a0b0c0d0e0f").expect("test key decode");
+                return aes_gcm::Key::<aes_gcm::Aes128Gcm>::clone_from_slice(&bytes);
+            }
+
+            #[cfg(not(any(test, feature = "test-support")))]
+            {
+                archodex_com::api_private_key().await.clone()
+            }
         }
     }
 
