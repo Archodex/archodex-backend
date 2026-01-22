@@ -39,7 +39,7 @@ base64 = "0.22.1"
 migrator = { path = "migrator" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
-surrealdb = { version = "= 2.3.7", features = ["rustls"] }
+surrealdb = { version = "= 2.5.0", features = ["rustls"] }
 tokio = { version = "1.47.1", default-features = false, features = [
   "macros",
   "rt-multi-thread",
